@@ -7,6 +7,7 @@ import { DailyPnLChart } from "@/components/charts/daily-pnl-chart";
 import { WinLossPie } from "@/components/charts/win-loss-pie";
 import { PerformanceBar } from "@/components/charts/performance-bar";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { PerformanceTab } from "@/components/analytics/performance-tab";
 
 // Extended demo data for analytics
 const monthlyData = [
@@ -66,6 +67,7 @@ export default function AnalyticsPage() {
         <Tabs defaultValue="overview">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="performance">Performance</TabsTrigger>
             <TabsTrigger value="strategy">By Strategy</TabsTrigger>
             <TabsTrigger value="session">By Session</TabsTrigger>
             <TabsTrigger value="risk">Risk Analysis</TabsTrigger>
@@ -137,6 +139,10 @@ export default function AnalyticsPage() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="performance" className="space-y-6 mt-6">
+            <PerformanceTab />
           </TabsContent>
 
           <TabsContent value="strategy" className="space-y-6 mt-6">
