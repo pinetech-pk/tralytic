@@ -420,9 +420,41 @@ export interface Database {
           total_pnl: number;
         }[];
       };
+      get_periodic_performance: {
+        Args: {
+          p_user_id: string;
+          p_period_type?: string;
+          p_num_periods?: number;
+          p_account_id?: string;
+        };
+        Returns: {
+          period_key: string;
+          period_label: string;
+          period_start: string;
+          period_end: string;
+          total_trades: number;
+          winning_trades: number;
+          losing_trades: number;
+          win_rate: number;
+          total_pnl: number;
+          avg_pnl: number;
+          largest_win: number;
+          largest_loss: number;
+          long_trades: number;
+          short_trades: number;
+          total_risk_reward: number;
+          gross_profit: number;
+          gross_loss: number;
+          profit_factor: number;
+        }[];
+      };
     };
   };
 }
+
+// Periodic performance row type
+export type PeriodicPerformanceRow =
+  Database["public"]["Functions"]["get_periodic_performance"]["Returns"][number];
 
 // Convenience types
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
