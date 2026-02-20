@@ -43,6 +43,9 @@ export function PerformanceTable({ data, periodType }: PerformanceTableProps) {
       totalPnl: acc.totalPnl + row.total_pnl,
       longTrades: acc.longTrades + row.long_trades,
       shortTrades: acc.shortTrades + row.short_trades,
+      totalRiskReward: acc.totalRiskReward + row.total_risk_reward,
+      grossProfit: acc.grossProfit + row.gross_profit,
+      grossLoss: acc.grossLoss + row.gross_loss,
     }),
     {
       totalTrades: 0,
@@ -51,8 +54,18 @@ export function PerformanceTable({ data, periodType }: PerformanceTableProps) {
       totalPnl: 0,
       longTrades: 0,
       shortTrades: 0,
+      totalRiskReward: 0,
+      grossProfit: 0,
+      grossLoss: 0,
     }
   );
+
+  const overallProfitFactor =
+    totals.grossLoss > 0
+      ? Math.round((totals.grossProfit / totals.grossLoss) * 100) / 100
+      : totals.grossProfit > 0
+        ? Infinity
+        : 0;
 
   const overallWinRate =
     totals.totalTrades > 0
@@ -88,7 +101,10 @@ export function PerformanceTable({ data, periodType }: PerformanceTableProps) {
                   <TableHead className="text-right whitespace-nowrap">Worst Trade</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Long</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Short</TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Avg R:R</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Total RRx</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Gross Profit</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Gross Loss</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Profit Factor</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -151,7 +167,31 @@ export function PerformanceTable({ data, periodType }: PerformanceTableProps) {
                       {row.short_trades}
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {row.avg_risk_reward.toFixed(1)}R
+                      <span
+                        className={
+                          row.total_risk_reward >= 0 ? "text-green" : "text-red"
+                        }
+                      >
+                        {row.total_risk_reward >= 0 ? "+" : ""}
+                        {row.total_risk_reward.toFixed(2)}R
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-green">
+                      +${row.gross_profit.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-red">
+                      -${row.gross_loss.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      <span
+                        className={
+                          row.profit_factor >= 1 ? "text-green" : "text-red"
+                        }
+                      >
+                        {row.profit_factor >= 999
+                          ? "∞"
+                          : row.profit_factor.toFixed(2)}
+                      </span>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -198,7 +238,33 @@ export function PerformanceTable({ data, periodType }: PerformanceTableProps) {
                   <TableCell className="text-right font-mono">
                     {totals.shortTrades}
                   </TableCell>
-                  <TableCell className="text-right font-mono">—</TableCell>
+                  <TableCell className="text-right font-mono">
+                    <span
+                      className={
+                        totals.totalRiskReward >= 0 ? "text-green" : "text-red"
+                      }
+                    >
+                      {totals.totalRiskReward >= 0 ? "+" : ""}
+                      {totals.totalRiskReward.toFixed(2)}R
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-green">
+                    +${totals.grossProfit.toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-red">
+                    -${totals.grossLoss.toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono">
+                    <span
+                      className={
+                        overallProfitFactor >= 1 ? "text-green" : "text-red"
+                      }
+                    >
+                      {overallProfitFactor === Infinity
+                        ? "∞"
+                        : overallProfitFactor.toFixed(2)}
+                    </span>
+                  </TableCell>
                 </TableRow>
               </TableFooter>
             </Table>

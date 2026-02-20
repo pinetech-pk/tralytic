@@ -17,6 +17,8 @@ interface PerformanceSummary {
   bestPeriod: { label: string; pnl: number } | null;
   worstPeriod: { label: string; pnl: number } | null;
   avgTradesPerPeriod: number;
+  grossProfit: number;
+  grossLoss: number;
   profitFactor: number;
 }
 
@@ -44,6 +46,8 @@ function calculateSummary(data: PeriodicPerformanceRow[]): PerformanceSummary {
       bestPeriod: null,
       worstPeriod: null,
       avgTradesPerPeriod: 0,
+      grossProfit: 0,
+      grossLoss: 0,
       profitFactor: 0,
     };
   }
@@ -63,13 +67,13 @@ function calculateSummary(data: PeriodicPerformanceRow[]): PerformanceSummary {
     data[0]
   );
 
-  const totalGrossProfit = data.reduce(
-    (sum, d) => sum + (d.total_pnl > 0 ? d.total_pnl : 0),
-    0
-  );
-  const totalGrossLoss = Math.abs(
-    data.reduce((sum, d) => sum + (d.total_pnl < 0 ? d.total_pnl : 0), 0)
-  );
+  // Sum gross profit/loss from each period's per-trade breakdown
+  const grossProfit = Math.round(
+    data.reduce((sum, d) => sum + d.gross_profit, 0) * 100
+  ) / 100;
+  const grossLoss = Math.round(
+    data.reduce((sum, d) => sum + d.gross_loss, 0) * 100
+  ) / 100;
 
   return {
     totalTrades,
@@ -87,10 +91,12 @@ function calculateSummary(data: PeriodicPerformanceRow[]): PerformanceSummary {
       : null,
     avgTradesPerPeriod:
       data.length > 0 ? Math.round((totalTrades / data.length) * 10) / 10 : 0,
+    grossProfit,
+    grossLoss,
     profitFactor:
-      totalGrossLoss > 0
-        ? Math.round((totalGrossProfit / totalGrossLoss) * 100) / 100
-        : totalGrossProfit > 0
+      grossLoss > 0
+        ? Math.round((grossProfit / grossLoss) * 100) / 100
+        : grossProfit > 0
           ? Infinity
           : 0,
   };

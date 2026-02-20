@@ -55,8 +55,8 @@ function StatCard({
 function LoadingSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {Array.from({ length: 6 }).map((_, i) => (
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+        {Array.from({ length: 8 }).map((_, i) => (
           <Skeleton key={i} className="h-[84px] rounded-lg" />
         ))}
       </div>
@@ -133,7 +133,7 @@ export function PerformanceTab() {
       {!loading && !error && (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
             <StatCard
               label="Total Trades"
               value={String(summary.totalTrades)}
@@ -163,6 +163,18 @@ export function PerformanceTab() {
               label={`Losing ${periodLabel}`}
               value={`${summary.totalLosingWeeks} / ${data.length}`}
               icon={AlertTriangle}
+              valueColor="text-red"
+            />
+            <StatCard
+              label="Gross Profit"
+              value={`+$${summary.grossProfit.toFixed(2)}`}
+              icon={TrendingUp}
+              valueColor="text-green"
+            />
+            <StatCard
+              label="Gross Loss"
+              value={`-$${summary.grossLoss.toFixed(2)}`}
+              icon={TrendingDown}
               valueColor="text-red"
             />
             <StatCard

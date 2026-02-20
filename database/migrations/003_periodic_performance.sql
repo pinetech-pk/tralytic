@@ -26,7 +26,10 @@ RETURNS TABLE (
   largest_loss DECIMAL,
   long_trades BIGINT,
   short_trades BIGINT,
-  avg_risk_reward DECIMAL
+  total_risk_reward DECIMAL,
+  gross_profit DECIMAL,
+  gross_loss DECIMAL,
+  profit_factor DECIMAL
 ) AS $$
 DECLARE
   v_start_date DATE;
@@ -100,7 +103,20 @@ BEGIN
     ROUND(COALESCE(MIN(p.pnl), 0)::DECIMAL, 2) AS largest_loss,
     COUNT(*) FILTER (WHERE p.direction = 'LONG') AS long_trades,
     COUNT(*) FILTER (WHERE p.direction = 'SHORT') AS short_trades,
-    ROUND(COALESCE(AVG(p.risk_reward_actual), 0)::DECIMAL, 2) AS avg_risk_reward
+    ROUND(COALESCE(SUM(p.risk_reward_actual), 0)::DECIMAL, 2) AS total_risk_reward,
+    ROUND(COALESCE(SUM(p.pnl) FILTER (WHERE p.pnl > 0), 0)::DECIMAL, 2) AS gross_profit,
+    ROUND(ABS(COALESCE(SUM(p.pnl) FILTER (WHERE p.pnl < 0), 0))::DECIMAL, 2) AS gross_loss,
+    ROUND(
+      CASE
+        WHEN ABS(COALESCE(SUM(p.pnl) FILTER (WHERE p.pnl < 0), 0)) > 0 THEN
+          COALESCE(SUM(p.pnl) FILTER (WHERE p.pnl > 0), 0)::DECIMAL /
+          ABS(SUM(p.pnl) FILTER (WHERE p.pnl < 0))::DECIMAL
+        WHEN COALESCE(SUM(p.pnl) FILTER (WHERE p.pnl > 0), 0) > 0 THEN
+          999.99
+        ELSE
+          0
+      END, 2
+    ) AS profit_factor
   FROM periods p
   GROUP BY p.p_key, p.p_label, p.p_start, p.p_end
   ORDER BY p.p_start;

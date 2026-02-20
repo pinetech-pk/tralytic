@@ -442,7 +442,10 @@ export interface Database {
           largest_loss: number;
           long_trades: number;
           short_trades: number;
-          avg_risk_reward: number;
+          total_risk_reward: number;
+          gross_profit: number;
+          gross_loss: number;
+          profit_factor: number;
         }[];
       };
     };
