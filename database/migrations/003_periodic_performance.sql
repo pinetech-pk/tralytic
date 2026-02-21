@@ -64,19 +64,21 @@ BEGIN
     ) gs
   ),
   trade_data AS (
+    -- Use exit_date if available, otherwise fall back to entry_date
+    -- Include both open and closed trades (exclude only cancelled)
     SELECT
       CASE
-        WHEN p_period_type = 'weekly' THEN DATE_TRUNC('week', t.exit_date::DATE)::DATE
-        ELSE DATE_TRUNC('month', t.exit_date::DATE)::DATE
+        WHEN p_period_type = 'weekly' THEN DATE_TRUNC('week', COALESCE(t.exit_date, t.entry_date)::DATE)::DATE
+        ELSE DATE_TRUNC('month', COALESCE(t.exit_date, t.entry_date)::DATE)::DATE
       END AS t_period_start,
+      t.id AS trade_id,
       t.pnl,
       t.is_winner,
       t.direction,
       t.risk_reward_actual
     FROM public.trades t
     WHERE t.user_id = p_user_id
-      AND t.status = 'closed'
-      AND t.exit_date IS NOT NULL
+      AND t.status != 'cancelled'
       AND (p_account_id IS NULL OR t.account_id = p_account_id)
   )
   SELECT
@@ -84,13 +86,13 @@ BEGIN
     ap.p_label AS period_label,
     ap.p_start AS period_start,
     ap.p_end AS period_end,
-    COALESCE(COUNT(td.pnl), 0)::BIGINT AS total_trades,
-    COALESCE(COUNT(td.pnl) FILTER (WHERE td.is_winner = true), 0)::BIGINT AS winning_trades,
-    COALESCE(COUNT(td.pnl) FILTER (WHERE td.is_winner = false), 0)::BIGINT AS losing_trades,
+    COUNT(td.trade_id)::BIGINT AS total_trades,
+    COUNT(td.trade_id) FILTER (WHERE td.is_winner = true)::BIGINT AS winning_trades,
+    COUNT(td.trade_id) FILTER (WHERE td.is_winner = false)::BIGINT AS losing_trades,
     ROUND(
       CASE
-        WHEN COUNT(td.pnl) > 0 THEN
-          (COUNT(td.pnl) FILTER (WHERE td.is_winner = true)::DECIMAL / COUNT(td.pnl)) * 100
+        WHEN COUNT(td.trade_id) > 0 THEN
+          (COUNT(td.trade_id) FILTER (WHERE td.is_winner = true)::DECIMAL / COUNT(td.trade_id)) * 100
         ELSE 0
       END, 2
     ) AS win_rate,
@@ -103,8 +105,8 @@ BEGIN
     ) AS avg_pnl,
     ROUND(COALESCE(MAX(td.pnl), 0)::DECIMAL, 2) AS largest_win,
     ROUND(COALESCE(MIN(td.pnl), 0)::DECIMAL, 2) AS largest_loss,
-    COALESCE(COUNT(td.pnl) FILTER (WHERE td.direction = 'LONG'), 0)::BIGINT AS long_trades,
-    COALESCE(COUNT(td.pnl) FILTER (WHERE td.direction = 'SHORT'), 0)::BIGINT AS short_trades,
+    COUNT(td.trade_id) FILTER (WHERE td.direction = 'LONG')::BIGINT AS long_trades,
+    COUNT(td.trade_id) FILTER (WHERE td.direction = 'SHORT')::BIGINT AS short_trades,
     ROUND(COALESCE(SUM(td.risk_reward_actual), 0)::DECIMAL, 2) AS total_risk_reward,
     ROUND(COALESCE(SUM(td.pnl) FILTER (WHERE td.pnl > 0), 0)::DECIMAL, 2) AS gross_profit,
     ROUND(ABS(COALESCE(SUM(td.pnl) FILTER (WHERE td.pnl < 0), 0))::DECIMAL, 2) AS gross_loss,
