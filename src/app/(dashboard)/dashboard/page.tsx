@@ -19,6 +19,7 @@ import { PerformanceBar } from "@/components/charts/performance-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createClient } from "@/lib/supabase/client";
 import type { Account, Strategy } from "@/lib/types/database";
 
@@ -88,6 +89,14 @@ const TIME_RANGE_OPTIONS = [
   { value: "60days", label: "Last 60 Days" },
 ];
 
+const ACCOUNT_TYPE_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "personal", label: "Personal" },
+  { value: "funded", label: "Funded" },
+  { value: "demo", label: "Demo" },
+  { value: "backtest", label: "Backtest" },
+];
+
 const SESSION_COLORS: Record<string, string> = {
   NY: "bg-green",
   LO: "bg-blue",
@@ -155,6 +164,7 @@ export default function DashboardPage() {
   const [strategies, setStrategies] = useState<Strategy[]>([]);
 
   // Filter states
+  const [selectedAccountType, setSelectedAccountType] = useState("personal");
   const [selectedAccount, setSelectedAccount] = useState("");
   const [selectedStrategy, setSelectedStrategy] = useState("");
   const [selectedSession, setSelectedSession] = useState("");
@@ -206,6 +216,22 @@ export default function DashboardPage() {
 
       if (selectedAccount) {
         tradesQuery = tradesQuery.eq("account_id", selectedAccount);
+      } else if (selectedAccountType) {
+        const typeAccountIds = accounts
+          .filter((a) => a.account_type === selectedAccountType)
+          .map((a) => a.id);
+        if (typeAccountIds.length > 0) {
+          tradesQuery = tradesQuery.in("account_id", typeAccountIds);
+        } else {
+          // No accounts of this type — show empty state
+          setStats(null);
+          setEquityData([]);
+          setDailyPnL([]);
+          setStrategyPerformance([]);
+          setSessionPerformance([]);
+          setLoading(false);
+          return;
+        }
       }
       if (selectedStrategy) {
         tradesQuery = tradesQuery.eq("strategy_id", selectedStrategy);
@@ -358,7 +384,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, selectedAccount, selectedStrategy, selectedSession, selectedTimeRange]);
+  }, [supabase, selectedAccountType, accounts, selectedAccount, selectedStrategy, selectedSession, selectedTimeRange]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -378,9 +404,13 @@ export default function DashboardPage() {
   }));
 
   // Account and Strategy filter options
+  const filteredAccounts = selectedAccountType
+    ? accounts.filter((a) => a.account_type === selectedAccountType)
+    : accounts;
+
   const accountOptions = [
     { value: "", label: "All Accounts" },
-    ...accounts.map((a) => ({ value: a.id, label: a.name })),
+    ...filteredAccounts.map((a) => ({ value: a.id, label: a.name })),
   ];
 
   const strategyOptions = [
@@ -396,6 +426,26 @@ export default function DashboardPage() {
       <Header title="Dashboard" description="Overview of your trading performance" />
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
+        {/* Account Type Filter */}
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-muted-foreground">Account Type:</span>
+          <Tabs
+            value={selectedAccountType}
+            onValueChange={(val) => {
+              setSelectedAccountType(val);
+              setSelectedAccount("");
+            }}
+          >
+            <TabsList>
+              {ACCOUNT_TYPE_OPTIONS.map((opt) => (
+                <TabsTrigger key={opt.value} value={opt.value}>
+                  {opt.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+
         {/* Filters Row */}
         <div className="flex flex-wrap gap-4">
           <div className="w-48">
