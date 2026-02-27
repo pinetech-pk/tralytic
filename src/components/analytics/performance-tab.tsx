@@ -69,7 +69,11 @@ function LoadingSkeleton() {
   );
 }
 
-export function PerformanceTab() {
+interface PerformanceTabProps {
+  accountIds?: string[];
+}
+
+export function PerformanceTab({ accountIds }: PerformanceTabProps) {
   const {
     data,
     summary,
@@ -79,7 +83,7 @@ export function PerformanceTab() {
     numPeriods,
     setPeriodType,
     setNumPeriods,
-  } = usePerformanceData();
+  } = usePerformanceData(accountIds);
 
   const periodLabel = periodType === "weekly" ? "Weeks" : "Months";
 

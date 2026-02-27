@@ -1,61 +1,138 @@
 "use client";
 
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Header } from "@/components/layout/header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { EquityCurve } from "@/components/charts/equity-curve";
-import { DailyPnLChart } from "@/components/charts/daily-pnl-chart";
-import { WinLossPie } from "@/components/charts/win-loss-pie";
-import { PerformanceBar } from "@/components/charts/performance-bar";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
+import { createClient } from "@/lib/supabase/client";
+import type { Account, Trade, Strategy } from "@/lib/types/database";
+import { OverviewTab } from "@/components/analytics/overview-tab";
 import { PerformanceTab } from "@/components/analytics/performance-tab";
+import { StrategyTab } from "@/components/analytics/strategy-tab";
+import { SessionTab } from "@/components/analytics/session-tab";
+import { RiskTab } from "@/components/analytics/risk-tab";
 
-// Extended demo data for analytics
-const monthlyData = [
-  { trade: 1, equity: 100, pnl: 0 },
-  { trade: 10, equity: 102.5, pnl: 2.5 },
-  { trade: 20, equity: 104.8, pnl: 2.3 },
-  { trade: 30, equity: 107.2, pnl: 2.4 },
-  { trade: 40, equity: 108.9, pnl: 1.7 },
-  { trade: 50, equity: 111.5, pnl: 2.6 },
-  { trade: 60, equity: 113.2, pnl: 1.7 },
-  { trade: 70, equity: 114.8, pnl: 1.6 },
-  { trade: 80, equity: 116.1, pnl: 1.3 },
-  { trade: 90, equity: 117.9, pnl: 1.8 },
-  { trade: 100, equity: 119.5, pnl: 1.6 },
+const ACCOUNT_TYPE_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "personal", label: "Personal" },
+  { value: "funded", label: "Funded" },
+  { value: "demo", label: "Demo" },
+  { value: "backtest", label: "Backtest" },
 ];
 
-const monthlyPnL = [
-  { date: "Oct", pnl: 4.50, trades: 25 },
-  { date: "Nov", pnl: 6.20, trades: 35 },
-  { date: "Dec", pnl: 8.80, trades: 40 },
-];
-
-const directionStats = [
-  { name: "Long", winRate: 65, trades: 65, pnl: 12.50, color: "bg-green" },
-  { name: "Short", winRate: 55, trades: 35, pnl: 7.00, color: "bg-red" },
-];
-
-const strategyStats = [
-  { name: "CCM + Trix", winRate: 68, trades: 45, pnl: 9.80 },
-  { name: "Trix Ribbon Divergence", winRate: 58, trades: 30, pnl: 5.20 },
-  { name: "CCM + RSI Midpoints", winRate: 55, trades: 25, pnl: 4.50 },
-];
-
-const sessionStats = [
-  { name: "New York", winRate: 67, trades: 55, pnl: 11.20, color: "bg-green" },
-  { name: "London", winRate: 60, trades: 30, pnl: 5.50, color: "bg-blue" },
-  { name: "Asian", winRate: 50, trades: 15, pnl: 2.80, color: "bg-purple" },
-];
-
-const riskStats = {
-  avgRiskPercent: 0.12,
-  avgRiskAmount: 0.12,
-  avgRR: 2.1,
-  totalRisk: 12.50,
-  maxDrawdown: 2.35,
-};
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Skeleton className="h-[380px] rounded-lg" />
+        <Skeleton className="h-[380px] rounded-lg" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Skeleton className="h-[300px] rounded-lg" />
+        <Skeleton className="h-[300px] rounded-lg" />
+        <Skeleton className="h-[300px] rounded-lg" />
+      </div>
+    </div>
+  );
+}
 
 export default function AnalyticsPage() {
+  const supabase = createClient();
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [strategies, setStrategies] = useState<Strategy[]>([]);
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [selectedAccountType, setSelectedAccountType] = useState("personal");
+  const [loading, setLoading] = useState(true);
+  const [accountsLoaded, setAccountsLoaded] = useState(false);
+
+  // Fetch accounts and strategies on mount
+  useEffect(() => {
+    async function fetchBase() {
+      const [accountsRes, strategiesRes] = await Promise.all([
+        supabase
+          .from("accounts")
+          .select("*")
+          .eq("is_active", true)
+          .order("name") as unknown as Promise<{
+          data: Account[] | null;
+          error: any;
+        }>,
+        supabase
+          .from("strategies")
+          .select("*")
+          .eq("is_active", true)
+          .order("name") as unknown as Promise<{
+          data: Strategy[] | null;
+          error: any;
+        }>,
+      ]);
+      if (accountsRes.data) setAccounts(accountsRes.data);
+      if (strategiesRes.data) setStrategies(strategiesRes.data);
+      setAccountsLoaded(true);
+    }
+    fetchBase();
+  }, [supabase]);
+
+  // Filtered account IDs for the Performance tab RPC
+  const filteredAccountIds = useMemo(() => {
+    if (!selectedAccountType) return [];
+    return accounts
+      .filter((a) => a.account_type === selectedAccountType)
+      .map((a) => a.id);
+  }, [selectedAccountType, accounts]);
+
+  // Fetch trades based on selected account type
+  const fetchTrades = useCallback(async () => {
+    setLoading(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      let query = (supabase.from("trades") as any)
+        .select("*")
+        .eq("user_id", user.id)
+        .neq("status", "cancelled")
+        .order("entry_date", { ascending: true });
+
+      if (selectedAccountType) {
+        const typeIds = accounts
+          .filter((a) => a.account_type === selectedAccountType)
+          .map((a) => a.id);
+        if (typeIds.length === 0) {
+          setTrades([]);
+          setLoading(false);
+          return;
+        }
+        query = query.in("account_id", typeIds);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error("Error fetching trades:", error);
+        setTrades([]);
+      } else {
+        setTrades((data as Trade[]) || []);
+      }
+    } catch (err) {
+      console.error("Error fetching trades:", err);
+      setTrades([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase, selectedAccountType, accounts]);
+
+  // Fetch trades after accounts are loaded
+  useEffect(() => {
+    if (accountsLoaded) {
+      fetchTrades();
+    }
+  }, [fetchTrades, accountsLoaded]);
+
   return (
     <div className="flex flex-col h-full">
       <Header
@@ -64,6 +141,26 @@ export default function AnalyticsPage() {
       />
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
+        {/* Account Type Filter */}
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-muted-foreground">
+            Account Type:
+          </span>
+          <Tabs
+            value={selectedAccountType}
+            onValueChange={setSelectedAccountType}
+          >
+            <TabsList>
+              {ACCOUNT_TYPE_OPTIONS.map((opt) => (
+                <TabsTrigger key={opt.value} value={opt.value}>
+                  {opt.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+
+        {/* Analytics Tabs */}
         <Tabs defaultValue="overview">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -74,156 +171,35 @@ export default function AnalyticsPage() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6 mt-6">
-            {/* Main Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <EquityCurve data={monthlyData} title="3-Month Equity Curve" />
-              <DailyPnLChart data={monthlyPnL} title="Monthly P&L" />
-            </div>
-
-            {/* Win/Loss and Direction */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <WinLossPie wins={62} losses={38} />
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-medium">
-                    Direction Analysis
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {directionStats.map((stat) => (
-                    <PerformanceBar
-                      key={stat.name}
-                      label={stat.name}
-                      value={stat.winRate}
-                      maxValue={100}
-                      trades={stat.trades}
-                      pnl={stat.pnl}
-                      color={stat.color}
-                    />
-                  ))}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-medium">
-                    Key Metrics
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total Trades</span>
-                    <span className="font-mono font-medium">100</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Win Rate</span>
-                    <span className="font-mono font-medium text-green">62%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Profit Factor</span>
-                    <span className="font-mono font-medium">1.85</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Avg R:R</span>
-                    <span className="font-mono font-medium">2.1R</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Best Trade</span>
-                    <span className="font-mono font-medium text-green">+$1.25</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Worst Trade</span>
-                    <span className="font-mono font-medium text-red">-$0.45</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            {loading ? (
+              <LoadingSkeleton />
+            ) : (
+              <OverviewTab trades={trades} />
+            )}
           </TabsContent>
 
           <TabsContent value="performance" className="space-y-6 mt-6">
-            <PerformanceTab />
+            <PerformanceTab accountIds={filteredAccountIds} />
           </TabsContent>
 
           <TabsContent value="strategy" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Strategy Performance Comparison</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {strategyStats.map((strategy) => (
-                  <div key={strategy.name} className="space-y-2">
-                    <PerformanceBar
-                      label={strategy.name}
-                      value={strategy.winRate}
-                      maxValue={100}
-                      trades={strategy.trades}
-                      pnl={strategy.pnl}
-                      color="bg-blue"
-                    />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+            {loading ? (
+              <LoadingSkeleton />
+            ) : (
+              <StrategyTab trades={trades} strategies={strategies} />
+            )}
           </TabsContent>
 
           <TabsContent value="session" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Session Performance Comparison</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {sessionStats.map((session) => (
-                  <div key={session.name} className="space-y-2">
-                    <PerformanceBar
-                      label={session.name}
-                      value={session.winRate}
-                      maxValue={100}
-                      trades={session.trades}
-                      pnl={session.pnl}
-                      color={session.color}
-                    />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+            {loading ? (
+              <LoadingSkeleton />
+            ) : (
+              <SessionTab trades={trades} />
+            )}
           </TabsContent>
 
           <TabsContent value="risk" className="space-y-6 mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardContent className="p-6">
-                  <p className="text-sm text-muted-foreground">Avg Risk %</p>
-                  <p className="text-2xl font-bold font-mono mt-1">
-                    {riskStats.avgRiskPercent.toFixed(2)}%
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <p className="text-sm text-muted-foreground">Avg Risk Amount</p>
-                  <p className="text-2xl font-bold font-mono mt-1">
-                    ${riskStats.avgRiskAmount.toFixed(2)}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <p className="text-sm text-muted-foreground">Average R:R</p>
-                  <p className="text-2xl font-bold font-mono mt-1">
-                    {riskStats.avgRR.toFixed(1)}R
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <p className="text-sm text-muted-foreground">Max Drawdown</p>
-                  <p className="text-2xl font-bold font-mono mt-1 text-red">
-                    ${riskStats.maxDrawdown.toFixed(2)}
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
+            {loading ? <LoadingSkeleton /> : <RiskTab trades={trades} />}
           </TabsContent>
         </Tabs>
       </div>

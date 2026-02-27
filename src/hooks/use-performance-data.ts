@@ -102,7 +102,7 @@ function calculateSummary(data: PeriodicPerformanceRow[]): PerformanceSummary {
   };
 }
 
-export function usePerformanceData(): UsePerformanceDataReturn {
+export function usePerformanceData(accountIds?: string[]): UsePerformanceDataReturn {
   const [periodType, setPeriodType] = useState<PeriodType>("weekly");
   const [numPeriods, setNumPeriods] = useState<NumPeriods>(12);
   const [data, setData] = useState<PeriodicPerformanceRow[]>([]);
@@ -127,13 +127,19 @@ export function usePerformanceData(): UsePerformanceDataReturn {
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rpcParams: Record<string, any> = {
+        p_user_id: user.id,
+        p_period_type: periodType,
+        p_num_periods: numPeriods,
+      };
+      if (accountIds && accountIds.length > 0) {
+        rpcParams.p_account_ids = accountIds;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: result, error: rpcError } = await (supabase.rpc as any)(
         "get_periodic_performance",
-        {
-          p_user_id: user.id,
-          p_period_type: periodType,
-          p_num_periods: numPeriods,
-        }
+        rpcParams
       );
 
       if (rpcError) {
@@ -150,7 +156,8 @@ export function usePerformanceData(): UsePerformanceDataReturn {
     } finally {
       setLoading(false);
     }
-  }, [periodType, numPeriods]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodType, numPeriods, JSON.stringify(accountIds)]);
 
   useEffect(() => {
     fetchData();
