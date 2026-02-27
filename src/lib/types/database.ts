@@ -425,7 +425,7 @@ export interface Database {
           p_user_id: string;
           p_period_type?: string;
           p_num_periods?: number;
-          p_account_id?: string;
+          p_account_ids?: string[];
         };
         Returns: {
           period_key: string;

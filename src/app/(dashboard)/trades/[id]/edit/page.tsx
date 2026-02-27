@@ -35,12 +35,20 @@ const marketOptions = [
 ];
 
 const timeframeOptions = [
-  { value: "1m", label: "1 Minute" },
-  { value: "5m", label: "5 Minutes" },
-  { value: "15m", label: "15 Minutes" },
-  { value: "1h", label: "1 Hour" },
-  { value: "4h", label: "4 Hours" },
-  { value: "1d", label: "Daily" },
+  { value: "1m", label: "1m" },
+  { value: "2m", label: "2m" },
+  { value: "3m", label: "3m" },
+  { value: "5m", label: "5m" },
+  { value: "10m", label: "10m" },
+  { value: "15m", label: "15m" },
+  { value: "30m", label: "30m" },
+  { value: "1h", label: "1h" },
+  { value: "2h", label: "2h" },
+  { value: "4h", label: "4h" },
+  { value: "6h", label: "6h" },
+  { value: "12h", label: "12h" },
+  { value: "1d", label: "1D" },
+  { value: "3d", label: "3D" },
 ];
 
 const statusOptions = [
