@@ -94,7 +94,7 @@ export default function NewTradePage() {
     chartUrl: "",
   });
 
-  // Fetch accounts and strategies
+  // Fetch accounts and strategies, pre-select defaults
   useEffect(() => {
     async function fetchData() {
       const [accountsRes, strategiesRes] = await Promise.all([
@@ -102,8 +102,20 @@ export default function NewTradePage() {
         supabase.from("strategies").select("*").eq("is_active", true).order("name") as unknown as Promise<{ data: Strategy[] | null; error: any }>,
       ]);
 
-      if (accountsRes.data) setAccounts(accountsRes.data);
-      if (strategiesRes.data) setStrategies(strategiesRes.data);
+      if (accountsRes.data) {
+        setAccounts(accountsRes.data);
+        const defaultAccount = accountsRes.data.find((a) => a.is_default);
+        if (defaultAccount) {
+          setFormData((prev) => ({ ...prev, accountId: defaultAccount.id }));
+        }
+      }
+      if (strategiesRes.data) {
+        setStrategies(strategiesRes.data);
+        const defaultStrategy = strategiesRes.data.find((s) => s.is_default);
+        if (defaultStrategy) {
+          setFormData((prev) => ({ ...prev, strategyId: defaultStrategy.id }));
+        }
+      }
     }
 
     fetchData();

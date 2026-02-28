@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Plus, Wallet, MoreVertical, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Plus, Wallet, MoreVertical, Loader2, Pencil, Trash2, Star } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +47,7 @@ const initialFormData = {
   initial_capital: "",
   broker: "",
   description: "",
+  is_default: false,
 };
 
 export default function AccountsPage() {
@@ -137,6 +138,13 @@ export default function AccountsPage() {
       return;
     }
 
+    // If setting as default, unset all other defaults first
+    if (formData.is_default) {
+      await (supabase.from("accounts") as any)
+        .update({ is_default: false })
+        .eq("user_id", user.id);
+    }
+
     const { error } = await supabase.from("accounts").insert({
       user_id: user.id,
       name: formData.name,
@@ -146,6 +154,7 @@ export default function AccountsPage() {
       current_balance: parseFloat(formData.initial_capital) || 0,
       broker: formData.broker || null,
       description: formData.description || null,
+      is_default: formData.is_default,
     } as any);
 
     if (error) {
@@ -169,6 +178,7 @@ export default function AccountsPage() {
       initial_capital: account.initial_capital.toString(),
       broker: account.broker || "",
       description: account.description || "",
+      is_default: account.is_default,
     });
     setActiveMenu(null);
     setEditDialogOpen(true);
@@ -179,6 +189,16 @@ export default function AccountsPage() {
     if (!selectedAccount) return;
     setSubmitting(true);
 
+    // If setting as default, unset all other defaults first
+    if (editFormData.is_default) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await (supabase.from("accounts") as any)
+          .update({ is_default: false })
+          .eq("user_id", user.id);
+      }
+    }
+
     const { error } = await (supabase
       .from("accounts") as any)
       .update({
@@ -188,6 +208,7 @@ export default function AccountsPage() {
         initial_capital: parseFloat(editFormData.initial_capital) || 0,
         broker: editFormData.broker || null,
         description: editFormData.description || null,
+        is_default: editFormData.is_default,
       })
       .eq("id", selectedAccount.id);
 
@@ -227,6 +248,24 @@ export default function AccountsPage() {
     }
 
     setSubmitting(false);
+  };
+
+  // Handle set as default
+  const handleSetDefault = async (account: AccountWithStats) => {
+    setActiveMenu(null);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Unset all defaults for this user, then set the selected one
+    await (supabase.from("accounts") as any)
+      .update({ is_default: false })
+      .eq("user_id", user.id);
+
+    await (supabase.from("accounts") as any)
+      .update({ is_default: true })
+      .eq("id", account.id);
+
+    fetchAccounts();
   };
 
   return (
@@ -309,6 +348,18 @@ export default function AccountsPage() {
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="is_default"
+                    checked={formData.is_default}
+                    onChange={(e) => setFormData({ ...formData, is_default: e.target.checked })}
+                    className="rounded border-border"
+                  />
+                  <Label htmlFor="is_default" className="font-normal">
+                    Set as default account
+                  </Label>
                 </div>
                 <div className="flex justify-end gap-3">
                   <Button
@@ -400,6 +451,18 @@ export default function AccountsPage() {
                   value={editFormData.description}
                   onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
                 />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="edit-is_default"
+                  checked={editFormData.is_default}
+                  onChange={(e) => setEditFormData({ ...editFormData, is_default: e.target.checked })}
+                  className="rounded border-border"
+                />
+                <Label htmlFor="edit-is_default" className="font-normal">
+                  Set as default account
+                </Label>
               </div>
               <div className="flex justify-end gap-3">
                 <Button
@@ -512,6 +575,11 @@ export default function AccountsPage() {
                           >
                             {account.risk_level} risk
                           </Badge>
+                          {account.is_default && (
+                            <Badge variant="default" className="text-xs">
+                              Default
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -526,7 +594,7 @@ export default function AccountsPage() {
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                       {activeMenu === account.id && (
-                        <div className="absolute right-0 top-full mt-1 w-36 bg-background-card border border-border rounded-md shadow-lg z-10">
+                        <div className="absolute right-0 top-full mt-1 w-44 bg-background-card border border-border rounded-md shadow-lg z-10">
                           <button
                             className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
                             onClick={() => handleEditClick(account)}
@@ -534,6 +602,15 @@ export default function AccountsPage() {
                             <Pencil className="h-4 w-4" />
                             Edit
                           </button>
+                          {!account.is_default && (
+                            <button
+                              className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+                              onClick={() => handleSetDefault(account)}
+                            >
+                              <Star className="h-4 w-4" />
+                              Set as Default
+                            </button>
+                          )}
                           <button
                             className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red hover:bg-muted/50 transition-colors"
                             onClick={() => handleDeleteClick(account)}

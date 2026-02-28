@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Plus, Target, MoreVertical, Pencil, Trash2, ExternalLink, Loader2 } from "lucide-react";
+import { Plus, Target, MoreVertical, Pencil, Trash2, ExternalLink, Loader2, Star } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +36,7 @@ interface FormData {
   risk_management: string;
   tradingview_url: string;
   is_active: boolean;
+  is_default: boolean;
 }
 
 const initialFormData: FormData = {
@@ -47,6 +48,7 @@ const initialFormData: FormData = {
   risk_management: "",
   tradingview_url: "",
   is_active: true,
+  is_default: false,
 };
 
 export default function StrategiesPage() {
@@ -157,7 +159,13 @@ export default function StrategiesPage() {
       .map((tag) => tag.trim())
       .filter((tag) => tag.length > 0);
 
-    // Try without tradingview_url first if column might not exist
+    // If setting as default, unset all other defaults first
+    if (formData.is_default) {
+      await (supabase.from("strategies") as any)
+        .update({ is_default: false })
+        .eq("user_id", userData.user.id);
+    }
+
     const insertData: Record<string, unknown> = {
       user_id: userData.user.id,
       name: formData.name,
@@ -167,6 +175,7 @@ export default function StrategiesPage() {
       exit_criteria: formData.exit_criteria || null,
       risk_management: formData.risk_management || null,
       is_active: formData.is_active,
+      is_default: formData.is_default,
     };
 
     // Only add tradingview_url if it has a value
@@ -200,6 +209,7 @@ export default function StrategiesPage() {
       risk_management: strategy.risk_management || "",
       tradingview_url: strategy.tradingview_url || "",
       is_active: strategy.is_active,
+      is_default: strategy.is_default,
     });
     setActiveMenu(null);
     setEditDialogOpen(true);
@@ -217,6 +227,16 @@ export default function StrategiesPage() {
       .map((tag) => tag.trim())
       .filter((tag) => tag.length > 0);
 
+    // If setting as default, unset all other defaults first
+    if (formData.is_default) {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData.user) {
+        await (supabase.from("strategies") as any)
+          .update({ is_default: false })
+          .eq("user_id", userData.user.id);
+      }
+    }
+
     const updateData: Record<string, unknown> = {
       name: formData.name,
       description: formData.description || null,
@@ -225,6 +245,7 @@ export default function StrategiesPage() {
       exit_criteria: formData.exit_criteria || null,
       risk_management: formData.risk_management || null,
       is_active: formData.is_active,
+      is_default: formData.is_default,
       updated_at: new Date().toISOString(),
     };
 
@@ -292,6 +313,24 @@ export default function StrategiesPage() {
       fetchStrategies();
     }
     setActiveMenu(null);
+  };
+
+  // Handle set as default
+  const handleSetDefault = async (strategy: StrategyWithStats) => {
+    setActiveMenu(null);
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
+
+    // Unset all defaults for this user, then set the selected one
+    await (supabase.from("strategies") as any)
+      .update({ is_default: false })
+      .eq("user_id", userData.user.id);
+
+    await (supabase.from("strategies") as any)
+      .update({ is_default: true })
+      .eq("id", strategy.id);
+
+    fetchStrategies();
   };
 
   // Form fields JSX - inlined to prevent focus loss on re-render
@@ -379,6 +418,18 @@ export default function StrategiesPage() {
         />
         <Label htmlFor="is_active" className="font-normal">
           Active strategy
+        </Label>
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="is_default"
+          checked={formData.is_default}
+          onChange={(e) => handleFormChange("is_default", e.target.checked)}
+          className="rounded border-border"
+        />
+        <Label htmlFor="is_default" className="font-normal">
+          Set as default strategy
         </Label>
       </div>
     </>
@@ -556,6 +607,11 @@ export default function StrategiesPage() {
                       <div>
                         <div className="flex items-center gap-2">
                           <CardTitle className="text-base">{strategy.name}</CardTitle>
+                          {strategy.is_default && (
+                            <Badge variant="default" className="text-xs">
+                              Default
+                            </Badge>
+                          )}
                           {!strategy.is_active && (
                             <Badge variant="secondary" className="text-xs">
                               Inactive
@@ -585,7 +641,7 @@ export default function StrategiesPage() {
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                       {activeMenu === strategy.id && (
-                        <div className="absolute right-0 top-full mt-1 w-40 bg-background-card border border-border rounded-md shadow-lg z-10">
+                        <div className="absolute right-0 top-full mt-1 w-44 bg-background-card border border-border rounded-md shadow-lg z-10">
                           <button
                             className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
                             onClick={() => handleEditClick(strategy)}
@@ -593,6 +649,15 @@ export default function StrategiesPage() {
                             <Pencil className="h-4 w-4" />
                             Edit
                           </button>
+                          {!strategy.is_default && (
+                            <button
+                              className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+                              onClick={() => handleSetDefault(strategy)}
+                            >
+                              <Star className="h-4 w-4" />
+                              Set as Default
+                            </button>
+                          )}
                           <button
                             className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
                             onClick={() => handleToggleActive(strategy)}
