@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Loader2, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Loader2, MoreVertical, Pencil, Trash2, ExternalLink } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -354,6 +354,7 @@ export default function TradesPage() {
                     <TableHead className="text-right">RRx</TableHead>
                     <TableHead className="text-right">P&L</TableHead>
                     <TableHead>Result</TableHead>
+                    <TableHead className="text-center">Chart</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -367,12 +368,12 @@ export default function TradesPage() {
                         {formatDate(trade.entry_date, "MMM d")}
                       </TableCell>
                       <TableCell>
-                        <div>
+                        <Link href={`/trades/${trade.id}`} className="block hover:underline">
                           <div className="font-medium">{trade.title}</div>
                           <div className="text-xs text-muted-foreground">
                             {trade.security}
                           </div>
-                        </div>
+                        </Link>
                       </TableCell>
                       <TableCell>
                         <DirectionBadge direction={trade.direction} />
@@ -428,6 +429,21 @@ export default function TradesPage() {
                       <TableCell>
                         {trade.is_winner != null ? (
                           <ResultBadge isWinner={trade.is_winner} />
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {trade.chart_url ? (
+                          <a
+                            href={trade.chart_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center text-blue hover:text-blue/80 transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}
