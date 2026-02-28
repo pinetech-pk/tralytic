@@ -56,6 +56,7 @@ export interface Database {
           account_type: "personal" | "funded" | "demo" | "backtest";
           broker: string | null;
           is_active: boolean;
+          is_default: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -71,6 +72,7 @@ export interface Database {
           account_type?: "personal" | "funded" | "demo" | "backtest";
           broker?: string | null;
           is_active?: boolean;
+          is_default?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -84,6 +86,7 @@ export interface Database {
           account_type?: "personal" | "funded" | "demo" | "backtest";
           broker?: string | null;
           is_active?: boolean;
+          is_default?: boolean;
           updated_at?: string;
         };
       };
@@ -100,6 +103,7 @@ export interface Database {
           risk_management: string | null;
           tradingview_url: string | null;
           is_active: boolean;
+          is_default: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -115,6 +119,7 @@ export interface Database {
           risk_management?: string | null;
           tradingview_url?: string | null;
           is_active?: boolean;
+          is_default?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -128,6 +133,7 @@ export interface Database {
           risk_management?: string | null;
           tradingview_url?: string | null;
           is_active?: boolean;
+          is_default?: boolean;
           updated_at?: string;
         };
       };
