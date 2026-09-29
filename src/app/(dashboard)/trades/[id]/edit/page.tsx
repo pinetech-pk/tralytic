@@ -35,6 +35,8 @@ const marketOptions = [
 ];
 
 const timeframeOptions = [
+  { value: "15s", label: "15s" },
+  { value: "30s", label: "30s" },
   { value: "1m", label: "1m" },
   { value: "2m", label: "2m" },
   { value: "3m", label: "3m" },
@@ -288,7 +290,7 @@ export default function EditTradePage() {
   ];
 
   const strategyOptions = [
-    { value: "", label: "Select Strategy" },
+    { value: "", label: "No Strategy" },
     ...strategies.map((s) => ({ value: s.id, label: s.name })),
   ];
 

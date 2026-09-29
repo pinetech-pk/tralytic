@@ -172,6 +172,7 @@ export default function DashboardPage() {
   const [selectedStrategy, setSelectedStrategy] = useState("");
   const [selectedSession, setSelectedSession] = useState<SessionFilter>("");
   const [selectedTimeRange, setSelectedTimeRange] = useState("7days");
+  const [includeArchived, setIncludeArchived] = useState(false);
 
   // Data states
   const [stats, setStats] = useState<TradeStats | null>(null);
@@ -186,7 +187,7 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchFilters() {
       const [accountsRes, strategiesRes] = await Promise.all([
-        supabase.from("accounts").select("*").eq("is_active", true).order("name"),
+        supabase.from("accounts").select("*").eq("is_active", true).eq("is_archived", false).order("name"),
         supabase.from("strategies").select("*").eq("is_active", true).order("name"),
       ]);
 
@@ -211,11 +212,14 @@ export default function DashboardPage() {
 
       const { startDate, endDate } = getDateRange(selectedTimeRange);
 
-      // Build the query for trades
       let tradesQuery = supabase
-        .from("trades")
+        .from("trades_with_archive")
         .select("*")
         .eq("user_id", user.id);
+
+      if (!includeArchived) {
+        tradesQuery = tradesQuery.eq("account_is_archived", false);
+      }
 
       if (selectedAccount) {
         tradesQuery = tradesQuery.eq("account_id", selectedAccount);
@@ -387,7 +391,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, selectedAccountType, accounts, selectedAccount, selectedStrategy, selectedSession, selectedTimeRange]);
+  }, [supabase, selectedAccountType, accounts, selectedAccount, selectedStrategy, selectedSession, selectedTimeRange, includeArchived]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -479,6 +483,15 @@ export default function DashboardPage() {
               onChange={(e) => setSelectedTimeRange(e.target.value)}
             />
           </div>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-border"
+              checked={includeArchived}
+              onChange={(e) => setIncludeArchived(e.target.checked)}
+            />
+            Include archived
+          </label>
         </div>
 
         {loading ? (

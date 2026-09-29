@@ -42,6 +42,7 @@ export default function AnalyticsPage() {
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [selectedAccountType, setSelectedAccountType] = useState("personal");
+  const [includeArchived, setIncludeArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
 
@@ -53,6 +54,7 @@ export default function AnalyticsPage() {
           .from("accounts")
           .select("*")
           .eq("is_active", true)
+          .eq("is_archived", false)
           .order("name"),
         supabase
           .from("strategies")
@@ -88,11 +90,15 @@ export default function AnalyticsPage() {
       }
 
       let query = supabase
-        .from("trades")
+        .from("trades_with_archive")
         .select("*")
         .eq("user_id", user.id)
         .neq("status", "cancelled")
         .order("entry_date", { ascending: true });
+
+      if (!includeArchived) {
+        query = query.eq("account_is_archived", false);
+      }
 
       if (selectedAccountType) {
         const typeIds = accounts
@@ -119,7 +125,7 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, selectedAccountType, accounts]);
+  }, [supabase, selectedAccountType, accounts, includeArchived]);
 
   // Fetch trades after accounts are loaded
   useEffect(() => {
@@ -137,7 +143,7 @@ export default function AnalyticsPage() {
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {/* Account Type Filter */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm font-medium text-muted-foreground">
             Account Type:
           </span>
@@ -153,6 +159,16 @@ export default function AnalyticsPage() {
               ))}
             </TabsList>
           </Tabs>
+
+          <label className="ml-auto flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-border"
+              checked={includeArchived}
+              onChange={(e) => setIncludeArchived(e.target.checked)}
+            />
+            Include archived accounts
+          </label>
         </div>
 
         {/* Analytics Tabs */}
@@ -174,7 +190,10 @@ export default function AnalyticsPage() {
           </TabsContent>
 
           <TabsContent value="performance" className="space-y-6 mt-6">
-            <PerformanceTab accountIds={filteredAccountIds} />
+            <PerformanceTab
+              accountIds={filteredAccountIds}
+              includeArchived={includeArchived}
+            />
           </TabsContent>
 
           <TabsContent value="strategy" className="space-y-6 mt-6">

@@ -95,10 +95,12 @@ export default function StrategiesPage() {
       return;
     }
 
-    // Get trade stats for all strategies
+    // Strategy stats describe current performance, so archived accounts
+    // are excluded.
     const { data: tradesData, error: tradesError } = await supabase
-      .from("trades")
-      .select("strategy_id, pnl, risk_reward_actual, is_winner");
+      .from("trades_with_archive")
+      .select("strategy_id, pnl, risk_reward_actual, is_winner")
+      .eq("account_is_archived", false);
 
     if (tradesError) {
       console.error("Error fetching trades:", tradesError);

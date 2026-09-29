@@ -102,7 +102,10 @@ function calculateSummary(data: PeriodicPerformanceRow[]): PerformanceSummary {
   };
 }
 
-export function usePerformanceData(accountIds?: string[]): UsePerformanceDataReturn {
+export function usePerformanceData(
+  accountIds?: string[],
+  includeArchived = false
+): UsePerformanceDataReturn {
   const [periodType, setPeriodType] = useState<PeriodType>("weekly");
   const [numPeriods, setNumPeriods] = useState<NumPeriods>(12);
   const [data, setData] = useState<PeriodicPerformanceRow[]>([]);
@@ -131,6 +134,7 @@ export function usePerformanceData(accountIds?: string[]): UsePerformanceDataRet
           p_user_id: user.id,
           p_period_type: periodType,
           p_num_periods: numPeriods,
+          p_include_archived: includeArchived,
         };
       if (accountIds && accountIds.length > 0) {
         rpcParams.p_account_ids = accountIds;
@@ -156,7 +160,7 @@ export function usePerformanceData(accountIds?: string[]): UsePerformanceDataRet
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodType, numPeriods, JSON.stringify(accountIds)]);
+  }, [periodType, numPeriods, includeArchived, JSON.stringify(accountIds)]);
 
   useEffect(() => {
     fetchData();

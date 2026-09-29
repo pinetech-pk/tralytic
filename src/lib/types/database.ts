@@ -85,6 +85,8 @@ export interface Database {
           broker: string | null;
           is_active: boolean;
           is_default: boolean;
+          is_archived: boolean;
+          archived_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -101,6 +103,8 @@ export interface Database {
           broker?: string | null;
           is_active?: boolean;
           is_default?: boolean;
+          is_archived?: boolean;
+          archived_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -115,6 +119,8 @@ export interface Database {
           broker?: string | null;
           is_active?: boolean;
           is_default?: boolean;
+          is_archived?: boolean;
+          archived_at?: string | null;
           updated_at?: string;
         };
         Relationships: [
@@ -827,7 +833,29 @@ export interface Database {
       };
     };
     Views: {
-      [_ in never]: never;
+      // Every trade, tagged with its account's archive state (migration 007).
+      // Read-only; filter on account_is_archived to scope analytics.
+      trades_with_archive: {
+        Row: Database["public"]["Tables"]["trades"]["Row"] & {
+          account_is_archived: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "trades_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "trades_strategy_id_fkey";
+            columns: ["strategy_id"];
+            isOneToOne: false;
+            referencedRelation: "strategies";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Functions: {
       calculate_trade_stats: {
@@ -931,6 +959,7 @@ export interface Database {
           p_period_type?: string;
           p_num_periods?: number;
           p_account_ids?: string[];
+          p_include_archived?: boolean;
         };
         Returns: {
           period_key: string;

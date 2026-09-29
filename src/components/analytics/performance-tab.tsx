@@ -71,9 +71,10 @@ function LoadingSkeleton() {
 
 interface PerformanceTabProps {
   accountIds?: string[];
+  includeArchived?: boolean;
 }
 
-export function PerformanceTab({ accountIds }: PerformanceTabProps) {
+export function PerformanceTab({ accountIds, includeArchived }: PerformanceTabProps) {
   const {
     data,
     summary,
@@ -83,7 +84,7 @@ export function PerformanceTab({ accountIds }: PerformanceTabProps) {
     numPeriods,
     setPeriodType,
     setNumPeriods,
-  } = usePerformanceData(accountIds);
+  } = usePerformanceData(accountIds, includeArchived);
 
   const periodLabel = periodType === "weekly" ? "Weeks" : "Months";
 

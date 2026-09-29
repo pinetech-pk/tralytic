@@ -35,6 +35,8 @@ const marketOptions = [
 ];
 
 const timeframeOptions = [
+  { value: "15s", label: "15s" },
+  { value: "30s", label: "30s" },
   { value: "1m", label: "1m" },
   { value: "2m", label: "2m" },
   { value: "3m", label: "3m" },
@@ -98,7 +100,7 @@ export default function NewTradePage() {
   useEffect(() => {
     async function fetchData() {
       const [accountsRes, strategiesRes] = await Promise.all([
-        supabase.from("accounts").select("*").eq("is_active", true).order("name"),
+        supabase.from("accounts").select("*").eq("is_active", true).eq("is_archived", false).order("name"),
         supabase.from("strategies").select("*").eq("is_active", true).order("name"),
       ]);
 
@@ -260,8 +262,10 @@ export default function NewTradePage() {
     ...accounts.map((a) => ({ value: a.id, label: a.name })),
   ];
 
+  // "No Strategy" is a real choice, not a prompt — discretionary trades
+  // should not be forced into a strategy.
   const strategyOptions = [
-    { value: "", label: "Select Strategy" },
+    { value: "", label: "No Strategy" },
     ...strategies.map((s) => ({ value: s.id, label: s.name })),
   ];
 
