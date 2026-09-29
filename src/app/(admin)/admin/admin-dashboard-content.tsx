@@ -37,7 +37,7 @@ export function AdminDashboardContent() {
 
         // Fetch subscription stats
         const { data: subscriptions } = await supabase
-          .from("subscriptions" as any)
+          .from("subscriptions")
           .select("status");
 
         let learningUsers = 0;
@@ -45,7 +45,7 @@ export function AdminDashboardContent() {
         let expiredUsers = 0;
 
         if (subscriptions) {
-          for (const sub of subscriptions as any[]) {
+          for (const sub of subscriptions) {
             if (sub.status === "learning") learningUsers++;
             else if (sub.status === "active") premiumUsers++;
             else if (sub.status === "expired") expiredUsers++;
@@ -54,13 +54,11 @@ export function AdminDashboardContent() {
 
         // Fetch platform metrics for early adopter slots
         const { data: metrics } = await supabase
-          .from("platform_metrics" as any)
+          .from("platform_metrics")
           .select("early_adopter_slots_remaining")
           .order("metric_date", { ascending: false })
           .limit(1)
           .single();
-
-        const metricsData = metrics as { early_adopter_slots_remaining?: number } | null;
 
         setStats({
           totalUsers: totalUsers || 0,
@@ -68,7 +66,7 @@ export function AdminDashboardContent() {
           learningUsers,
           premiumUsers,
           expiredUsers,
-          earlyAdopterSlots: metricsData?.early_adopter_slots_remaining ?? 1000,
+          earlyAdopterSlots: metrics?.early_adopter_slots_remaining ?? 1000,
         });
       } catch (error) {
         console.error("Error fetching stats:", error);

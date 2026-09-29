@@ -53,18 +53,12 @@ export default function AnalyticsPage() {
           .from("accounts")
           .select("*")
           .eq("is_active", true)
-          .order("name") as unknown as Promise<{
-          data: Account[] | null;
-          error: any;
-        }>,
+          .order("name"),
         supabase
           .from("strategies")
           .select("*")
           .eq("is_active", true)
-          .order("name") as unknown as Promise<{
-          data: Strategy[] | null;
-          error: any;
-        }>,
+          .order("name"),
       ]);
       if (accountsRes.data) setAccounts(accountsRes.data);
       if (strategiesRes.data) setStrategies(strategiesRes.data);
@@ -93,7 +87,8 @@ export default function AnalyticsPage() {
         return;
       }
 
-      let query = (supabase.from("trades") as any)
+      let query = supabase
+        .from("trades")
         .select("*")
         .eq("user_id", user.id)
         .neq("status", "cancelled")

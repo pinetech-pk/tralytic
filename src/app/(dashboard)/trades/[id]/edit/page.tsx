@@ -72,14 +72,15 @@ export default function EditTradePage() {
   const [formData, setFormData] = useState({
     title: "",
     security: "",
-    market: "crypto",
-    direction: "LONG",
+    // Narrowed to the trades column domains; <select> options supply these values.
+    market: "crypto" as Trade["market"],
+    direction: "LONG" as Trade["direction"],
     accountId: "",
     strategyId: "",
     entryDate: "",
     exitDate: "",
     timeframe: "1m",
-    session: "NY",
+    session: "NY" as NonNullable<Trade["session"]>,
     entryPrice: "",
     exitPrice: "",
     stopLoss: "",
@@ -89,7 +90,7 @@ export default function EditTradePage() {
     pnl: "",
     pnlPercent: "",
     riskRewardActual: "",
-    status: "closed",
+    status: "closed" as Trade["status"],
     setupNotes: "",
     executionNotes: "",
     reviewNotes: "",
@@ -102,9 +103,9 @@ export default function EditTradePage() {
   useEffect(() => {
     async function fetchData() {
       const [tradeRes, accountsRes, strategiesRes] = await Promise.all([
-        supabase.from("trades").select("*").eq("id", tradeId).single() as unknown as Promise<{ data: Trade | null; error: any }>,
-        supabase.from("accounts").select("*").eq("is_active", true).order("name") as unknown as Promise<{ data: Account[] | null; error: any }>,
-        supabase.from("strategies").select("*").eq("is_active", true).order("name") as unknown as Promise<{ data: Strategy[] | null; error: any }>,
+        supabase.from("trades").select("*").eq("id", tradeId).single(),
+        supabase.from("accounts").select("*").eq("is_active", true).order("name"),
+        supabase.from("strategies").select("*").eq("is_active", true).order("name"),
       ]);
 
       if (accountsRes.data) setAccounts(accountsRes.data);
@@ -265,8 +266,8 @@ export default function EditTradePage() {
         chart_url: formData.chartUrl || null,
       };
 
-      const { error } = await (supabase
-        .from("trades") as any)
+      const { error } = await supabase
+        .from("trades")
         .update(updateData)
         .eq("id", tradeId);
 

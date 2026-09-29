@@ -98,8 +98,8 @@ export default function NewTradePage() {
   useEffect(() => {
     async function fetchData() {
       const [accountsRes, strategiesRes] = await Promise.all([
-        supabase.from("accounts").select("*").eq("is_active", true).order("name") as unknown as Promise<{ data: Account[] | null; error: any }>,
-        supabase.from("strategies").select("*").eq("is_active", true).order("name") as unknown as Promise<{ data: Strategy[] | null; error: any }>,
+        supabase.from("accounts").select("*").eq("is_active", true).order("name"),
+        supabase.from("strategies").select("*").eq("is_active", true).order("name"),
       ]);
 
       if (accountsRes.data) {
@@ -242,7 +242,7 @@ export default function NewTradePage() {
         chart_url: formData.chartUrl || null,
       };
 
-      const { error } = await supabase.from("trades").insert(tradeData as any);
+      const { error } = await supabase.from("trades").insert(tradeData);
 
       if (error) throw error;
 

@@ -13,6 +13,7 @@ import {
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
+import type { PlatformMetrics } from "@/lib/types/database";
 
 interface MetricData {
   metric_date: string;
@@ -23,6 +24,24 @@ interface MetricData {
   early_adopter_slots_remaining: number;
   mrr_cents: number;
   conversion_rate: number;
+}
+
+// platform_metrics stores totals only; "active" and conversion rate are derived.
+function toMetricData(row: PlatformMetrics): MetricData {
+  const totalUsers = row.total_users ?? 0;
+  const learningUsers = row.total_learning ?? 0;
+  const premiumUsers = row.total_premium ?? 0;
+
+  return {
+    metric_date: row.metric_date,
+    total_users: totalUsers,
+    learning_users: learningUsers,
+    premium_users: premiumUsers,
+    active_subscriptions: learningUsers + premiumUsers,
+    early_adopter_slots_remaining: row.early_adopter_slots_remaining ?? 0,
+    mrr_cents: row.mrr_cents ?? 0,
+    conversion_rate: totalUsers > 0 ? (premiumUsers / totalUsers) * 100 : 0,
+  };
 }
 
 interface DashboardMetrics {
@@ -62,7 +81,7 @@ export function MetricsContent() {
 
         // Fetch historical metrics
         const { data: historicalData, error } = await supabase
-          .from("platform_metrics" as any)
+          .from("platform_metrics")
           .select("*")
           .gte("metric_date", startDate.toISOString().split("T")[0])
           .lte("metric_date", endDate.toISOString().split("T")[0])
@@ -72,7 +91,7 @@ export function MetricsContent() {
           console.error("Error fetching metrics:", error);
         }
 
-        const typedData = (historicalData || []) as unknown as MetricData[];
+        const typedData = (historicalData || []).map(toMetricData);
 
         // Get current (most recent) and previous metrics for comparison
         const currentMetrics = typedData[0] || null;

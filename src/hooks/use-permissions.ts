@@ -7,19 +7,6 @@ import type { User } from "@supabase/supabase-js";
 export type UserRole = "super_admin" | "web_admin" | "platform_user";
 export type SubscriptionStatus = "learning" | "active" | "past_due" | "cancelled" | "expired" | "paused";
 
-// Type for role data from database
-interface RoleData {
-  name: string;
-  display_name: string;
-  is_admin: boolean;
-}
-
-// Type for subscription data from database
-interface SubscriptionData {
-  status: string;
-  learning_ends_at: string | null;
-}
-
 export interface UserPermissions {
   // User info
   user: User | null;
@@ -89,9 +76,8 @@ export function usePermissions(): UserPermissions {
         }
 
         // Fetch user's roles with role details
-        // Using 'any' because user_roles table is from RBAC migration, not in auto-generated types
         const { data: userRolesData, error: rolesError } = await supabase
-          .from("user_roles" as any)
+          .from("user_roles")
           .select(`
             role_id,
             roles (
@@ -101,7 +87,7 @@ export function usePermissions(): UserPermissions {
             )
           `)
           .eq("user_id", user.id)
-          .eq("is_active", true) as { data: any[] | null; error: any };
+          .eq("is_active", true);
 
         if (rolesError) {
           console.error("Error fetching roles:", rolesError);
@@ -115,8 +101,7 @@ export function usePermissions(): UserPermissions {
 
         if (userRolesData && userRolesData.length > 0) {
           for (const ur of userRolesData) {
-            // Cast the nested roles object
-            const r = ur.roles as unknown as RoleData | null;
+            const r = ur.roles;
             if (r) {
               if (r.name === "super_admin") {
                 role = "super_admin";
@@ -137,12 +122,11 @@ export function usePermissions(): UserPermissions {
         }
 
         // Fetch subscription status
-        // Using 'any' because subscriptions table is from RBAC migration
         const { data: subscriptionData, error: subError } = await supabase
-          .from("subscriptions" as any)
+          .from("subscriptions")
           .select("status, learning_ends_at")
           .eq("user_id", user.id)
-          .single() as { data: any | null; error: any };
+          .single();
 
         if (subError && subError.code !== "PGRST116") {
           // PGRST116 = no rows found, which is OK for new users
@@ -155,8 +139,8 @@ export function usePermissions(): UserPermissions {
         let daysRemaining: number | null = null;
 
         if (subscriptionData) {
-          const sub = subscriptionData as unknown as SubscriptionData;
-          subscriptionStatus = sub.status as SubscriptionStatus;
+          const sub = subscriptionData;
+          subscriptionStatus = sub.status;
           isLearningPeriod = sub.status === "learning";
           isPremium = sub.status === "active";
 
@@ -170,9 +154,8 @@ export function usePermissions(): UserPermissions {
         }
 
         // Fetch permissions for user's roles
-        // Using 'any' because these tables are from RBAC migration
         const { data: permissionsData, error: permError } = await supabase
-          .from("user_roles" as any)
+          .from("user_roles")
           .select(`
             roles (
               role_permissions (
@@ -183,7 +166,7 @@ export function usePermissions(): UserPermissions {
             )
           `)
           .eq("user_id", user.id)
-          .eq("is_active", true) as { data: any[] | null; error: any };
+          .eq("is_active", true);
 
         if (permError) {
           console.error("Error fetching permissions:", permError);
@@ -193,11 +176,7 @@ export function usePermissions(): UserPermissions {
         const permissions: string[] = [];
         if (permissionsData) {
           for (const ur of permissionsData) {
-            const rolesObj = ur.roles as unknown as {
-              role_permissions: Array<{
-                permissions: { name: string } | null;
-              }>;
-            } | null;
+            const rolesObj = ur.roles;
 
             if (rolesObj?.role_permissions) {
               for (const rp of rolesObj.role_permissions) {

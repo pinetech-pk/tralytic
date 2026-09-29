@@ -21,7 +21,10 @@ import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createClient } from "@/lib/supabase/client";
-import type { Account, Strategy } from "@/lib/types/database";
+import type { Account, Strategy, Trade } from "@/lib/types/database";
+
+// "" means "no filter"; the other values match the trades.session column domain.
+type SessionFilter = NonNullable<Trade["session"]> | "";
 
 interface TradeStats {
   total_trades: number;
@@ -167,7 +170,7 @@ export default function DashboardPage() {
   const [selectedAccountType, setSelectedAccountType] = useState("personal");
   const [selectedAccount, setSelectedAccount] = useState("");
   const [selectedStrategy, setSelectedStrategy] = useState("");
-  const [selectedSession, setSelectedSession] = useState("");
+  const [selectedSession, setSelectedSession] = useState<SessionFilter>("");
   const [selectedTimeRange, setSelectedTimeRange] = useState("7days");
 
   // Data states
@@ -246,7 +249,7 @@ export default function DashboardPage() {
         tradesQuery = tradesQuery.lte("entry_date", endDate);
       }
 
-      const { data: trades, error: tradesError } = await tradesQuery.order("entry_date", { ascending: true }) as { data: any[] | null; error: any };
+      const { data: trades, error: tradesError } = await tradesQuery.order("entry_date", { ascending: true });
 
       if (tradesError) {
         console.error("Error fetching trades:", tradesError);
@@ -254,7 +257,7 @@ export default function DashboardPage() {
         return;
       }
 
-      const allTrades = (trades || []) as any[];
+      const allTrades = trades || [];
 
       // Calculate stats from trades
       const totalTrades = allTrades.length;
@@ -332,7 +335,7 @@ export default function DashboardPage() {
         const { data: strategiesData } = await supabase
           .from("strategies")
           .select("id, name")
-          .in("id", strategyIds) as { data: { id: string; name: string }[] | null; error: any };
+          .in("id", strategyIds);
 
         strategiesData?.forEach(s => {
           const existing = strategyMap.get(s.id);
@@ -466,7 +469,7 @@ export default function DashboardPage() {
             <Select
               options={SESSION_OPTIONS}
               value={selectedSession}
-              onChange={(e) => setSelectedSession(e.target.value)}
+              onChange={(e) => setSelectedSession(e.target.value as SessionFilter)}
             />
           </div>
           <div className="w-48">

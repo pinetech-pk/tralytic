@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PerformanceBar } from "@/components/charts/performance-bar";
 import { EmptyState } from "@/components/shared/empty-state";
 import { createClient } from "@/lib/supabase/client";
-import type { Strategy } from "@/lib/types/database";
+import type { Strategy, StrategyInsert, StrategyUpdate } from "@/lib/types/database";
 
 interface StrategyWithStats extends Strategy {
   trades: number;
@@ -84,10 +84,10 @@ export default function StrategiesPage() {
     setLoading(true);
 
     // Get strategies
-    const { data: strategiesData, error: strategiesError } = await (supabase
+    const { data: strategiesData, error: strategiesError } = await supabase
       .from("strategies")
       .select("*")
-      .order("created_at", { ascending: false }) as unknown as Promise<{ data: Strategy[] | null; error: any }>);
+      .order("created_at", { ascending: false });
 
     if (strategiesError) {
       console.error("Error fetching strategies:", strategiesError);
@@ -96,12 +96,9 @@ export default function StrategiesPage() {
     }
 
     // Get trade stats for all strategies
-    const { data: tradesData, error: tradesError } = await (supabase
+    const { data: tradesData, error: tradesError } = await supabase
       .from("trades")
-      .select("strategy_id, pnl, risk_reward_actual, is_winner") as unknown as Promise<{
-        data: { strategy_id: string | null; pnl: number | null; risk_reward_actual: number | null; is_winner: boolean | null }[] | null;
-        error: any;
-      }>);
+      .select("strategy_id, pnl, risk_reward_actual, is_winner");
 
     if (tradesError) {
       console.error("Error fetching trades:", tradesError);
@@ -161,12 +158,12 @@ export default function StrategiesPage() {
 
     // If setting as default, unset all other defaults first
     if (formData.is_default) {
-      await (supabase.from("strategies") as any)
+      await supabase.from("strategies")
         .update({ is_default: false })
         .eq("user_id", userData.user.id);
     }
 
-    const insertData: Record<string, unknown> = {
+    const insertData: StrategyInsert = {
       user_id: userData.user.id,
       name: formData.name,
       description: formData.description || null,
@@ -183,7 +180,7 @@ export default function StrategiesPage() {
       insertData.tradingview_url = formData.tradingview_url;
     }
 
-    const { error } = await (supabase.from("strategies") as any).insert(insertData);
+    const { error } = await supabase.from("strategies").insert(insertData);
 
     if (error) {
       console.error("Error creating strategy:", error);
@@ -231,13 +228,13 @@ export default function StrategiesPage() {
     if (formData.is_default) {
       const { data: userData } = await supabase.auth.getUser();
       if (userData.user) {
-        await (supabase.from("strategies") as any)
+        await supabase.from("strategies")
           .update({ is_default: false })
           .eq("user_id", userData.user.id);
       }
     }
 
-    const updateData: Record<string, unknown> = {
+    const updateData: StrategyUpdate = {
       name: formData.name,
       description: formData.description || null,
       tags: tagsArray,
@@ -254,7 +251,7 @@ export default function StrategiesPage() {
       updateData.tradingview_url = formData.tradingview_url;
     }
 
-    const { error } = await (supabase.from("strategies") as any)
+    const { error } = await supabase.from("strategies")
       .update(updateData)
       .eq("id", selectedStrategy.id);
 
@@ -283,7 +280,7 @@ export default function StrategiesPage() {
     if (!selectedStrategy) return;
     setDeleting(true);
 
-    const { error } = await (supabase.from("strategies") as any)
+    const { error } = await supabase.from("strategies")
       .delete()
       .eq("id", selectedStrategy.id);
 
@@ -300,7 +297,7 @@ export default function StrategiesPage() {
 
   // Toggle active status
   const handleToggleActive = async (strategy: StrategyWithStats) => {
-    const { error } = await (supabase.from("strategies") as any)
+    const { error } = await supabase.from("strategies")
       .update({
         is_active: !strategy.is_active,
         updated_at: new Date().toISOString(),
@@ -322,11 +319,11 @@ export default function StrategiesPage() {
     if (!userData.user) return;
 
     // Unset all defaults for this user, then set the selected one
-    await (supabase.from("strategies") as any)
+    await supabase.from("strategies")
       .update({ is_default: false })
       .eq("user_id", userData.user.id);
 
-    await (supabase.from("strategies") as any)
+    await supabase.from("strategies")
       .update({ is_default: true })
       .eq("id", strategy.id);
 

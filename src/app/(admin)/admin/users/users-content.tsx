@@ -71,14 +71,11 @@ export function UsersContent() {
           return;
         }
 
-        // Cast profiles for type safety
-        const typedProfiles = profiles as { id: string; email: string | null; full_name: string | null; created_at: string }[];
-
         // Fetch roles for each user
-        const userIds = typedProfiles.map((p) => p.id);
+        const userIds = profiles.map((p) => p.id);
 
         const { data: userRolesData } = await supabase
-          .from("user_roles" as any)
+          .from("user_roles")
           .select(
             `
             user_id,
@@ -94,17 +91,17 @@ export function UsersContent() {
 
         // Fetch subscriptions for each user
         const { data: subscriptionsData } = await supabase
-          .from("subscriptions" as any)
+          .from("subscriptions")
           .select("user_id, status")
           .in("user_id", userIds);
 
         // Build user data map
         const rolesMap = new Map<
           string,
-          { name: string; display_name: string; is_admin: boolean }
+          { name: string; display_name: string; is_admin: boolean | null }
         >();
         if (userRolesData) {
-          for (const ur of userRolesData as any[]) {
+          for (const ur of userRolesData) {
             if (ur.roles) {
               const currentRole = rolesMap.get(ur.user_id);
               // Keep highest role
@@ -122,13 +119,13 @@ export function UsersContent() {
 
         const subscriptionsMap = new Map<string, string>();
         if (subscriptionsData) {
-          for (const sub of subscriptionsData as any[]) {
+          for (const sub of subscriptionsData) {
             subscriptionsMap.set(sub.user_id, sub.status);
           }
         }
 
         // Combine data
-        const userData: UserData[] = typedProfiles.map((profile) => {
+        const userData: UserData[] = profiles.map((profile) => {
           const role = rolesMap.get(profile.id);
           return {
             id: profile.id,
