@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createClient } from "@/lib/supabase/client";
 import type { Account, Strategy, Trade } from "@/lib/types/database";
+import { winRate } from "@/lib/utils";
 
 // "" means "no filter"; the other values match the trades.session column domain.
 type SessionFilter = NonNullable<Trade["session"]> | "";
@@ -269,7 +270,7 @@ export default function DashboardPage() {
       const losers = allTrades.filter(t => t.is_winner === false);
       const winningTrades = winners.length;
       const losingTrades = losers.length;
-      const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
+      const overallWinRate = winRate(winningTrades, losingTrades);
       const totalPnl = allTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
       const avgWin = winningTrades > 0 ? winners.reduce((sum, t) => sum + (t.pnl || 0), 0) / winningTrades : 0;
       const avgLoss = losingTrades > 0 ? losers.reduce((sum, t) => sum + (t.pnl || 0), 0) / losingTrades : 0;
@@ -282,7 +283,7 @@ export default function DashboardPage() {
         total_trades: totalTrades,
         winning_trades: winningTrades,
         losing_trades: losingTrades,
-        win_rate: winRate,
+        win_rate: overallWinRate,
         total_pnl: totalPnl,
         avg_win: avgWin,
         avg_loss: avgLoss,
@@ -305,13 +306,17 @@ export default function DashboardPage() {
       setEquityData(equityPoints);
 
       // Calculate daily P&L
-      const dailyMap = new Map<string, { pnl: number; count: number; wins: number }>();
+      const dailyMap = new Map<
+        string,
+        { pnl: number; count: number; wins: number; losses: number }
+      >();
       allTrades.forEach(trade => {
         const date = trade.entry_date?.split("T")[0] || trade.entry_date;
-        const existing = dailyMap.get(date) || { pnl: 0, count: 0, wins: 0 };
+        const existing = dailyMap.get(date) || { pnl: 0, count: 0, wins: 0, losses: 0 };
         existing.pnl += trade.pnl || 0;
         existing.count += 1;
-        if (trade.is_winner) existing.wins += 1;
+        if (trade.is_winner === true) existing.wins += 1;
+        else if (trade.is_winner === false) existing.losses += 1;
         dailyMap.set(date, existing);
       });
       const dailyData: DailyPnL[] = Array.from(dailyMap.entries()).map(([date, data]) => ({
@@ -319,7 +324,7 @@ export default function DashboardPage() {
         total_pnl: data.pnl,
         trade_count: data.count,
         winning_trades: data.wins,
-        win_rate: data.count > 0 ? (data.wins / data.count) * 100 : 0,
+        win_rate: winRate(data.wins, data.losses),
       }));
       setDailyPnL(dailyData);
 
@@ -350,12 +355,13 @@ export default function DashboardPage() {
       const strategyPerf: StrategyPerformance[] = Array.from(strategyMap.entries()).map(([id, data]) => {
         const stratTrades = data.trades;
         const stratWins = stratTrades.filter(t => t.is_winner === true);
+        const stratLosses = stratTrades.filter(t => t.is_winner === false);
         return {
           strategy_id: id,
           strategy_name: data.name || "Unknown",
           total_trades: stratTrades.length,
           winning_trades: stratWins.length,
-          win_rate: stratTrades.length > 0 ? (stratWins.length / stratTrades.length) * 100 : 0,
+          win_rate: winRate(stratWins.length, stratLosses.length),
           total_pnl: stratTrades.reduce((sum, t) => sum + (t.pnl || 0), 0),
           avg_pnl: stratTrades.length > 0 ? stratTrades.reduce((sum, t) => sum + (t.pnl || 0), 0) / stratTrades.length : 0,
           avg_risk_reward: stratTrades.length > 0 ? stratTrades.reduce((sum, t) => sum + (t.risk_reward_actual || 0), 0) / stratTrades.length : 0,
@@ -375,12 +381,13 @@ export default function DashboardPage() {
 
       const sessionPerf: SessionPerformance[] = Array.from(sessionMap.entries()).map(([session, sessTrades]) => {
         const sessWins = sessTrades.filter(t => t.is_winner === true);
+        const sessLosses = sessTrades.filter(t => t.is_winner === false);
         return {
           session,
           session_name: sessionNames[session] || session,
           total_trades: sessTrades.length,
           winning_trades: sessWins.length,
-          win_rate: sessTrades.length > 0 ? (sessWins.length / sessTrades.length) * 100 : 0,
+          win_rate: winRate(sessWins.length, sessLosses.length),
           total_pnl: sessTrades.reduce((sum, t) => sum + (t.pnl || 0), 0),
         };
       });

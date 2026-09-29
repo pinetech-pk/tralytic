@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/shared/empty-state";
 import { createClient } from "@/lib/supabase/client";
 import type { Account } from "@/lib/types/database";
+import { winRate } from "@/lib/utils";
 
 interface AccountWithStats extends Account {
   trades_count?: number;
@@ -114,14 +115,17 @@ export default function AccountsPage() {
           .eq("status", "closed");
 
         const tradesCount = trades?.length || 0;
-        const winningTrades = trades?.filter((t) => t.is_winner)?.length || 0;
-        const winRate = tradesCount > 0 ? (winningTrades / tradesCount) * 100 : 0;
+        const winningTrades =
+          trades?.filter((t) => t.is_winner === true)?.length || 0;
+        const losingTrades =
+          trades?.filter((t) => t.is_winner === false)?.length || 0;
+        const accountWinRate = winRate(winningTrades, losingTrades);
         const totalPnl = trades?.reduce((sum, t) => sum + (t.pnl || 0), 0) || 0;
 
         return {
           ...account,
           trades_count: tradesCount,
-          win_rate: winRate,
+          win_rate: accountWinRate,
           total_pnl: totalPnl,
         };
       })

@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
 import type { Trade, Account, Strategy } from "@/lib/types/database";
+import { deriveIsWinner } from "@/lib/utils";
 
 const directionOptions = [
   { value: "LONG", label: "Long" },
@@ -244,9 +245,8 @@ export default function EditTradePage() {
     setSaving(true);
 
     try {
-      // Determine is_winner based on PnL
       const pnlValue = formData.pnl ? parseFloat(formData.pnl) : null;
-      const isWinner = pnlValue !== null ? pnlValue > 0 : null;
+      const isWinner = deriveIsWinner(pnlValue);
 
       const updateData = {
         account_id: formData.accountId || null,

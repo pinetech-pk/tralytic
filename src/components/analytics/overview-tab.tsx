@@ -7,6 +7,7 @@ import { DailyPnLChart } from "@/components/charts/daily-pnl-chart";
 import { WinLossPie } from "@/components/charts/win-loss-pie";
 import { PerformanceBar } from "@/components/charts/performance-bar";
 import type { Trade } from "@/lib/types/database";
+import { winRate } from "@/lib/utils";
 
 interface OverviewTabProps {
   trades: Trade[];
@@ -83,13 +84,11 @@ export function OverviewTab({ trades }: OverviewTabProps) {
     return directions.map((dir) => {
       const dirTrades = trades.filter((t) => t.direction === dir);
       const dirWins = dirTrades.filter((t) => t.is_winner === true).length;
+      const dirLosses = dirTrades.filter((t) => t.is_winner === false).length;
       const dirPnl = dirTrades.reduce((acc, t) => acc + (t.pnl || 0), 0);
       return {
         name: dir === "LONG" ? "Long" : "Short",
-        winRate:
-          dirTrades.length > 0
-            ? Math.round((dirWins / dirTrades.length) * 100)
-            : 0,
+        winRate: Math.round(winRate(dirWins, dirLosses)),
         trades: dirTrades.length,
         pnl: Math.round(dirPnl * 100) / 100,
         color: dir === "LONG" ? "bg-green" : "bg-red",
@@ -100,7 +99,7 @@ export function OverviewTab({ trades }: OverviewTabProps) {
   // Key metrics
   const metrics = useMemo(() => {
     const totalTrades = trades.length;
-    const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
+    const overallWinRate = winRate(wins, losses);
     const grossProfit = trades.reduce(
       (acc, t) => acc + (t.pnl && t.pnl > 0 ? t.pnl : 0),
       0
@@ -126,7 +125,7 @@ export function OverviewTab({ trades }: OverviewTabProps) {
 
     return {
       totalTrades,
-      winRate: Math.round(winRate * 10) / 10,
+      winRate: Math.round(overallWinRate * 10) / 10,
       profitFactor: Math.round(profitFactor * 100) / 100,
       totalRRx: Math.round(totalRRx * 100) / 100,
       totalPnl: Math.round(totalPnl * 100) / 100,

@@ -146,10 +146,14 @@ BEGIN
     COUNT(td.trade_id)::BIGINT AS total_trades,
     COUNT(td.trade_id) FILTER (WHERE td.is_winner = true)::BIGINT AS winning_trades,
     COUNT(td.trade_id) FILTER (WHERE td.is_winner = false)::BIGINT AS losing_trades,
+    -- Win rate is over decided trades only: break-even and unrecorded
+    -- trades (is_winner IS NULL) are neither wins nor losses, so they stay
+    -- out of the denominator instead of counting against the rate.
     ROUND(
       CASE
-        WHEN COUNT(td.trade_id) > 0 THEN
-          (COUNT(td.trade_id) FILTER (WHERE td.is_winner = true)::DECIMAL / COUNT(td.trade_id)) * 100
+        WHEN COUNT(td.trade_id) FILTER (WHERE td.is_winner IS NOT NULL) > 0 THEN
+          (COUNT(td.trade_id) FILTER (WHERE td.is_winner = true)::DECIMAL
+            / COUNT(td.trade_id) FILTER (WHERE td.is_winner IS NOT NULL)) * 100
         ELSE 0
       END, 2
     ) AS win_rate,

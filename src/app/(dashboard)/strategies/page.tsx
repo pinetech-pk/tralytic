@@ -19,6 +19,7 @@ import { PerformanceBar } from "@/components/charts/performance-bar";
 import { EmptyState } from "@/components/shared/empty-state";
 import { createClient } from "@/lib/supabase/client";
 import type { Strategy, StrategyInsert, StrategyUpdate } from "@/lib/types/database";
+import { winRate } from "@/lib/utils";
 
 interface StrategyWithStats extends Strategy {
   trades: number;
@@ -111,7 +112,8 @@ export default function StrategiesPage() {
       const strategyTrades = (tradesData || []).filter((t) => t.strategy_id === strategy.id);
       const totalTrades = strategyTrades.length;
       const winners = strategyTrades.filter((t) => t.is_winner === true).length;
-      const winRate = totalTrades > 0 ? Math.round((winners / totalTrades) * 100) : 0;
+      const losers = strategyTrades.filter((t) => t.is_winner === false).length;
+      const strategyWinRate = Math.round(winRate(winners, losers));
       const totalPnl = strategyTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
       const avgRR =
         totalTrades > 0
@@ -121,7 +123,7 @@ export default function StrategiesPage() {
       return {
         ...strategy,
         trades: totalTrades,
-        winRate,
+        winRate: strategyWinRate,
         pnl: totalPnl,
         avgRR: Math.round(avgRR * 100) / 100,
       };

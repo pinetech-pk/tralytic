@@ -1,6 +1,7 @@
 import { parse as parseDateFns, isValid } from "date-fns";
 import type { TradeInsert } from "@/lib/types/database";
 import type { FieldKey } from "./fields";
+import { deriveIsWinner } from "@/lib/utils";
 
 type Market = "crypto" | "forex" | "stocks" | "futures" | "options";
 type Session = "AS" | "LO" | "NY" | "OTHER";
@@ -178,7 +179,7 @@ export function buildTrades(
       (pnl != null && riskAmount != null && riskAmount !== 0 ? round2(pnl / riskAmount) : null);
 
     const winMapped = parseWinLoss(get(row, "is_winner"));
-    const isWinner = winMapped !== null ? winMapped : pnl != null ? pnl > 0 : null;
+    const isWinner = winMapped !== null ? winMapped : deriveIsWinner(pnl ?? null);
 
     const pnlPercent =
       parseNumber(get(row, "pnl_percent")) ??
