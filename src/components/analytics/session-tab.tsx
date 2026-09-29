@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { PerformanceBar } from "@/components/charts/performance-bar";
 import type { Trade } from "@/lib/types/database";
+import { winRate } from "@/lib/utils";
 
 const SESSION_LABELS: Record<string, string> = {
   AS: "Asian",
@@ -104,10 +105,7 @@ export function SessionTab({ trades }: SessionTabProps) {
         totalTrades: sessionTrades.length,
         wins,
         losses,
-        winRate:
-          sessionTrades.length > 0
-            ? Math.round((wins / sessionTrades.length) * 100 * 10) / 10
-            : 0,
+        winRate: Math.round(winRate(wins, losses) * 10) / 10,
         totalPnl: Math.round(totalPnl * 100) / 100,
         avgPnl: Math.round(avgPnl * 100) / 100,
         totalRRx: Math.round(totalRRx * 100) / 100,

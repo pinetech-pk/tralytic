@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Plus, Wallet, MoreVertical, Loader2, Pencil, Trash2, Star } from "lucide-react";
+import { Plus, Wallet, MoreVertical, Loader2, Pencil, Trash2, Star, Archive, ArchiveRestore } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/shared/empty-state";
 import { createClient } from "@/lib/supabase/client";
 import type { Account } from "@/lib/types/database";
+import { winRate } from "@/lib/utils";
 
 interface AccountWithStats extends Account {
   trades_count?: number;
@@ -114,14 +115,17 @@ export default function AccountsPage() {
           .eq("status", "closed");
 
         const tradesCount = trades?.length || 0;
-        const winningTrades = trades?.filter((t) => t.is_winner)?.length || 0;
-        const winRate = tradesCount > 0 ? (winningTrades / tradesCount) * 100 : 0;
+        const winningTrades =
+          trades?.filter((t) => t.is_winner === true)?.length || 0;
+        const losingTrades =
+          trades?.filter((t) => t.is_winner === false)?.length || 0;
+        const accountWinRate = winRate(winningTrades, losingTrades);
         const totalPnl = trades?.reduce((sum, t) => sum + (t.pnl || 0), 0) || 0;
 
         return {
           ...account,
           trades_count: tradesCount,
-          win_rate: winRate,
+          win_rate: accountWinRate,
           total_pnl: totalPnl,
         };
       })
@@ -274,6 +278,29 @@ export default function AccountsPage() {
     await supabase.from("accounts")
       .update({ is_default: true })
       .eq("id", account.id);
+
+    fetchAccounts();
+  };
+
+  // Archiving keeps the account's history browsable but drops its trades
+  // out of current analytics. An archived account can't be the default.
+  const handleToggleArchived = async (account: AccountWithStats) => {
+    setActiveMenu(null);
+    const archiving = !account.is_archived;
+
+    const { error } = await supabase
+      .from("accounts")
+      .update({
+        is_archived: archiving,
+        archived_at: archiving ? new Date().toISOString() : null,
+        ...(archiving ? { is_default: false } : {}),
+      })
+      .eq("id", account.id);
+
+    if (error) {
+      console.error("Error updating archive state:", error);
+      return;
+    }
 
     fetchAccounts();
   };
@@ -590,6 +617,11 @@ export default function AccountsPage() {
                               Default
                             </Badge>
                           )}
+                          {account.is_archived && (
+                            <Badge variant="outline" className="text-xs">
+                              Archived
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -612,7 +644,7 @@ export default function AccountsPage() {
                             <Pencil className="h-4 w-4" />
                             Edit
                           </button>
-                          {!account.is_default && (
+                          {!account.is_default && !account.is_archived && (
                             <button
                               className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
                               onClick={() => handleSetDefault(account)}
@@ -621,6 +653,22 @@ export default function AccountsPage() {
                               Set as Default
                             </button>
                           )}
+                          <button
+                            className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+                            onClick={() => handleToggleArchived(account)}
+                          >
+                            {account.is_archived ? (
+                              <>
+                                <ArchiveRestore className="h-4 w-4" />
+                                Unarchive
+                              </>
+                            ) : (
+                              <>
+                                <Archive className="h-4 w-4" />
+                                Archive
+                              </>
+                            )}
+                          </button>
                           <button
                             className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red hover:bg-muted/50 transition-colors"
                             onClick={() => handleDeleteClick(account)}

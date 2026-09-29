@@ -77,6 +77,10 @@ export default function TradesPage() {
   const [deleting, setDeleting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Bulk selection — ids only, scoped to the rows currently on screen.
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+
   // Filter states
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -158,6 +162,8 @@ export default function TradesPage() {
     } else {
       setTrades(data || []);
       setTotalCount(count || 0);
+      // Drop any selection the user can no longer see.
+      setSelectedIds([]);
     }
 
     setLoading(false);
@@ -166,6 +172,47 @@ export default function TradesPage() {
   useEffect(() => {
     fetchTrades();
   }, [currentPage, selectedAccount, selectedStrategy, selectedSession, selectedDirection, selectedResult, debouncedSearch]);
+
+  // Bulk selection
+  const allOnPageSelected =
+    trades.length > 0 && trades.every((t) => selectedIds.includes(t.id));
+
+  const toggleSelectAllOnPage = () => {
+    setSelectedIds(allOnPageSelected ? [] : trades.map((t) => t.id));
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    if (selectedIds.length === 0) return;
+    setDeleting(true);
+
+    const { error } = await supabase
+      .from("trades")
+      .delete()
+      .in("id", selectedIds);
+
+    if (error) {
+      console.error("Error deleting trades:", error);
+    } else {
+      setBulkDeleteDialogOpen(false);
+      setSelectedIds([]);
+      // Deleting the last rows of a page can leave it empty.
+      const remaining = totalCount - selectedIds.length;
+      const lastPage = Math.max(1, Math.ceil(remaining / PAGE_SIZE));
+      if (currentPage > lastPage) {
+        setCurrentPage(lastPage);
+      } else {
+        fetchTrades();
+      }
+    }
+
+    setDeleting(false);
+  };
 
   // Handle delete
   const handleDeleteClick = (trade: TradeWithRelations) => {
@@ -315,6 +362,72 @@ export default function TradesPage() {
           </DialogContent>
         </Dialog>
 
+        {/* Bulk action bar */}
+        {selectedIds.length > 0 && (
+          <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-background-card px-4 py-3">
+            <span className="text-sm">
+              {selectedIds.length} trade{selectedIds.length === 1 ? "" : "s"} selected
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedIds([])}
+              >
+                Clear
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setBulkDeleteDialogOpen(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete selected
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk delete confirmation */}
+        <Dialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete {selectedIds.length} trades?</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                This permanently deletes {selectedIds.length} trade
+                {selectedIds.length === 1 ? "" : "s"} and cannot be undone. To keep
+                the history but exclude it from analytics, archive the account
+                instead.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setBulkDeleteDialogOpen(false)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleBulkDeleteConfirm}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    `Delete ${selectedIds.length} trades`
+                  )}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Trades Table */}
         <Card>
           <CardContent className="p-0">
@@ -347,6 +460,15 @@ export default function TradesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-border align-middle"
+                        aria-label="Select all trades on this page"
+                        checked={allOnPageSelected}
+                        onChange={toggleSelectAllOnPage}
+                      />
+                    </TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Trade</TableHead>
                     <TableHead>Direction</TableHead>
@@ -364,8 +486,21 @@ export default function TradesPage() {
                   {trades.map((trade) => (
                     <TableRow
                       key={trade.id}
-                      className="hover:bg-muted/50"
+                      className={
+                        selectedIds.includes(trade.id)
+                          ? "bg-muted/40"
+                          : "hover:bg-muted/50"
+                      }
                     >
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-border align-middle"
+                          aria-label={`Select trade ${trade.title}`}
+                          checked={selectedIds.includes(trade.id)}
+                          onChange={() => toggleSelectOne(trade.id)}
+                        />
+                      </TableCell>
                       <TableCell className="font-mono text-muted-foreground">
                         {formatDate(trade.entry_date, "MMM d")}
                       </TableCell>

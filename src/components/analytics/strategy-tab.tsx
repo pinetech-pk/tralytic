@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { PerformanceBar } from "@/components/charts/performance-bar";
 import type { Trade, Strategy } from "@/lib/types/database";
+import { winRate } from "@/lib/utils";
 
 interface StrategyTabProps {
   trades: Trade[];
@@ -89,10 +90,7 @@ export function StrategyTab({ trades, strategies }: StrategyTabProps) {
         totalTrades: strategyTrades.length,
         wins,
         losses,
-        winRate:
-          strategyTrades.length > 0
-            ? Math.round((wins / strategyTrades.length) * 100 * 10) / 10
-            : 0,
+        winRate: Math.round(winRate(wins, losses) * 10) / 10,
         totalPnl: Math.round(totalPnl * 100) / 100,
         avgPnl: Math.round(avgPnl * 100) / 100,
         totalRRx: Math.round(totalRRx * 100) / 100,
