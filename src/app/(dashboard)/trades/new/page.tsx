@@ -65,6 +65,7 @@ export default function NewTradePage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [accountSize, setAccountSize] = useState<number>(0);
+  const [formError, setFormError] = useState<string | null>(null);
   const supabase = createClient();
 
   const [formData, setFormData] = useState({
@@ -195,6 +196,17 @@ export default function NewTradePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
+
+    // A closed trade without both of these has no RRx, which makes it
+    // useless for performance analysis.
+    if (requiresResults && (!formData.riskAmount || !formData.pnl)) {
+      setFormError(
+        "Closed trades need both Risk (USD) and P&L — without them RRx cannot be calculated."
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -251,10 +263,16 @@ export default function NewTradePage() {
       router.push("/trades");
     } catch (error) {
       console.error("Error creating trade:", error);
+      setFormError(
+        error instanceof Error ? error.message : "Failed to create trade"
+      );
     } finally {
       setLoading(false);
     }
   };
+
+  // Risk and P&L are what RRx is derived from, so a closed trade must have both.
+  const requiresResults = formData.status === "closed";
 
   // Build options for selects
   const accountOptions = [
@@ -430,7 +448,9 @@ export default function NewTradePage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="riskAmount">Risk (USD) *</Label>
+                  <Label htmlFor="riskAmount">
+                    Risk (USD){requiresResults && " *"}
+                  </Label>
                   <Input
                     id="riskAmount"
                     name="riskAmount"
@@ -439,7 +459,13 @@ export default function NewTradePage() {
                     placeholder="0.50"
                     value={formData.riskAmount}
                     onChange={handleChange}
+                    required={requiresResults}
                   />
+                  {requiresResults && (
+                    <p className="text-xs text-muted-foreground">
+                      Needed for RRx
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Risk % (Auto)</Label>
@@ -511,7 +537,7 @@ export default function NewTradePage() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="pnl">P&L (USD) *</Label>
+                <Label htmlFor="pnl">P&L (USD){requiresResults && " *"}</Label>
                 <Input
                   id="pnl"
                   name="pnl"
@@ -520,7 +546,13 @@ export default function NewTradePage() {
                   placeholder="1.50"
                   value={formData.pnl}
                   onChange={handleChange}
+                  required={requiresResults}
                 />
+                {requiresResults && (
+                  <p className="text-xs text-muted-foreground">
+                    Needed for RRx
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>P&L % (Auto)</Label>
@@ -618,6 +650,11 @@ export default function NewTradePage() {
           </Card>
 
           {/* Submit */}
+          {formError && (
+            <div className="rounded-md border border-red/40 bg-red/10 px-4 py-3 text-sm text-red">
+              {formError}
+            </div>
+          )}
           <div className="flex justify-end gap-4">
             <Link href="/trades">
               <Button variant="outline" type="button">
