@@ -126,18 +126,17 @@ export function usePerformanceData(accountIds?: string[]): UsePerformanceDataRet
         return;
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rpcParams: Record<string, any> = {
-        p_user_id: user.id,
-        p_period_type: periodType,
-        p_num_periods: numPeriods,
-      };
+      const rpcParams: Database["public"]["Functions"]["get_periodic_performance"]["Args"] =
+        {
+          p_user_id: user.id,
+          p_period_type: periodType,
+          p_num_periods: numPeriods,
+        };
       if (accountIds && accountIds.length > 0) {
         rpcParams.p_account_ids = accountIds;
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: result, error: rpcError } = await (supabase.rpc as any)(
+      const { data: result, error: rpcError } = await supabase.rpc(
         "get_periodic_performance",
         rpcParams
       );
@@ -146,7 +145,7 @@ export function usePerformanceData(accountIds?: string[]): UsePerformanceDataRet
         throw rpcError;
       }
 
-      setData((result as PeriodicPerformanceRow[]) ?? []);
+      setData(result ?? []);
     } catch (err) {
       console.error("Failed to fetch performance data:", err);
       setError(

@@ -37,6 +37,10 @@ interface TradeWithRelations extends Trade {
   strategies?: { name: string } | null;
 }
 
+// "" means "no filter"; the other values match the trades column domains.
+type SessionFilter = NonNullable<Trade["session"]> | "";
+type DirectionFilter = Trade["direction"] | "";
+
 const PAGE_SIZE = 25;
 
 const SESSION_OPTIONS = [
@@ -78,8 +82,8 @@ export default function TradesPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("");
   const [selectedStrategy, setSelectedStrategy] = useState("");
-  const [selectedSession, setSelectedSession] = useState("");
-  const [selectedDirection, setSelectedDirection] = useState("");
+  const [selectedSession, setSelectedSession] = useState<SessionFilter>("");
+  const [selectedDirection, setSelectedDirection] = useState<DirectionFilter>("");
   const [selectedResult, setSelectedResult] = useState("");
 
   const supabase = createClient();
@@ -111,8 +115,8 @@ export default function TradesPage() {
   useEffect(() => {
     async function fetchFilters() {
       const [accountsRes, strategiesRes] = await Promise.all([
-        supabase.from("accounts").select("*").eq("is_active", true).order("name") as unknown as Promise<{ data: Account[] | null; error: any }>,
-        supabase.from("strategies").select("*").eq("is_active", true).order("name") as unknown as Promise<{ data: Strategy[] | null; error: any }>,
+        supabase.from("accounts").select("*").eq("is_active", true).order("name"),
+        supabase.from("strategies").select("*").eq("is_active", true).order("name"),
       ]);
 
       if (accountsRes.data) setAccounts(accountsRes.data);
@@ -147,7 +151,7 @@ export default function TradesPage() {
       );
     }
 
-    const { data, error, count } = await query as { data: TradeWithRelations[] | null; error: any; count: number | null };
+    const { data, error, count } = await query;
 
     if (error) {
       console.error("Error fetching trades:", error);
@@ -174,8 +178,8 @@ export default function TradesPage() {
     if (!selectedTrade) return;
     setDeleting(true);
 
-    const { error } = await (supabase
-      .from("trades") as any)
+    const { error } = await supabase
+      .from("trades")
       .delete()
       .eq("id", selectedTrade.id);
 
@@ -252,14 +256,14 @@ export default function TradesPage() {
               <Select
                 options={SESSION_OPTIONS}
                 value={selectedSession}
-                onChange={(e) => { setSelectedSession(e.target.value); setCurrentPage(1); }}
+                onChange={(e) => { setSelectedSession(e.target.value as SessionFilter); setCurrentPage(1); }}
               />
             </div>
             <div className="w-36">
               <Select
                 options={DIRECTION_OPTIONS}
                 value={selectedDirection}
-                onChange={(e) => { setSelectedDirection(e.target.value); setCurrentPage(1); }}
+                onChange={(e) => { setSelectedDirection(e.target.value as DirectionFilter); setCurrentPage(1); }}
               />
             </div>
             <div className="w-32">

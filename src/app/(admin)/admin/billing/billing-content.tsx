@@ -19,15 +19,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
+import type { SubscriptionStatus } from "@/lib/types/database";
 
 interface SubscriptionData {
   id: string;
   user_id: string;
   status: string;
-  plan_type: string | null;
-  started_at: string | null;
+  billing_interval: string | null;
+  created_at: string | null;
   current_period_end: string | null;
-  price_at_signup_cents: number | null;
+  amount_cents: number | null;
   is_early_adopter: boolean;
   email: string;
   full_name: string | null;
@@ -66,8 +67,8 @@ export function BillingContent() {
       try {
         // Fetch all subscriptions for stats
         const { data: allSubs } = await supabase
-          .from("subscriptions" as any)
-          .select("status, price_at_signup_cents, is_early_adopter");
+          .from("subscriptions")
+          .select("status, amount_cents, is_early_adopter");
 
         // Calculate stats
         let activeCount = 0;
@@ -77,10 +78,10 @@ export function BillingContent() {
         let earlyAdopterCount = 0;
 
         if (allSubs) {
-          for (const sub of allSubs as any[]) {
+          for (const sub of allSubs) {
             if (sub.status === "active") {
               activeCount++;
-              monthlyRevenue += sub.price_at_signup_cents || 0;
+              monthlyRevenue += sub.amount_cents || 0;
             } else if (sub.status === "learning") {
               learningCount++;
             } else if (sub.status === "expired") {
@@ -107,15 +108,15 @@ export function BillingContent() {
 
         // Build query for paginated subscriptions
         let query = supabase
-          .from("subscriptions" as any)
+          .from("subscriptions")
           .select("*", { count: "exact" });
 
         if (filterStatus !== "all") {
-          query = query.eq("status", filterStatus);
+          query = query.eq("status", filterStatus as SubscriptionStatus);
         }
 
         const { data: subsData, count } = await query
-          .order("started_at", { ascending: false })
+          .order("created_at", { ascending: false })
           .range(offset, offset + SUBSCRIPTIONS_PER_PAGE - 1);
 
         setTotalSubscriptions(count || 0);
@@ -126,7 +127,7 @@ export function BillingContent() {
         }
 
         // Fetch user info for each subscription
-        const userIds = (subsData as any[]).map((s) => s.user_id);
+        const userIds = subsData.map((s) => s.user_id);
         const { data: profiles } = await supabase
           .from("profiles")
           .select("id, email, full_name")
@@ -137,29 +138,27 @@ export function BillingContent() {
           { email: string; full_name: string | null }
         >();
         if (profiles) {
-          for (const p of profiles as any[]) {
+          for (const p of profiles) {
             profilesMap.set(p.id, { email: p.email || "", full_name: p.full_name });
           }
         }
 
         // Combine data
-        const subscriptionData: SubscriptionData[] = (subsData as any[]).map(
-          (sub) => {
-            const profile = profilesMap.get(sub.user_id);
-            return {
-              id: sub.id,
-              user_id: sub.user_id,
-              status: sub.status,
-              plan_type: sub.plan_type,
-              started_at: sub.started_at,
-              current_period_end: sub.current_period_end,
-              price_at_signup_cents: sub.price_at_signup_cents,
-              is_early_adopter: sub.is_early_adopter || false,
-              email: profile?.email || "Unknown",
-              full_name: profile?.full_name || null,
-            };
-          }
-        );
+        const subscriptionData: SubscriptionData[] = subsData.map((sub) => {
+          const profile = profilesMap.get(sub.user_id);
+          return {
+            id: sub.id,
+            user_id: sub.user_id,
+            status: sub.status,
+            billing_interval: sub.billing_interval,
+            created_at: sub.created_at,
+            current_period_end: sub.current_period_end,
+            amount_cents: sub.amount_cents,
+            is_early_adopter: sub.is_early_adopter || false,
+            email: profile?.email || "Unknown",
+            full_name: profile?.full_name || null,
+          };
+        });
 
         setSubscriptions(subscriptionData);
       } catch (error) {
@@ -403,21 +402,23 @@ export function BillingContent() {
 
                       {/* Plan */}
                       <div className="flex items-center text-sm">
-                        {sub.plan_type || "—"}
+                        {sub.billing_interval || "—"}
                       </div>
 
                       {/* Price */}
                       <div className="flex items-center text-sm font-medium">
-                        {sub.price_at_signup_cents
-                          ? `${formatCurrency(sub.price_at_signup_cents)}/mo`
+                        {sub.amount_cents
+                          ? `${formatCurrency(sub.amount_cents)}/${
+                              sub.billing_interval === "year" ? "yr" : "mo"
+                            }`
                           : "—"}
                       </div>
 
                       {/* Started */}
                       <div className="flex items-center text-sm text-muted-foreground">
                         <Calendar className="h-4 w-4 mr-2" />
-                        {sub.started_at
-                          ? new Date(sub.started_at).toLocaleDateString()
+                        {sub.created_at
+                          ? new Date(sub.created_at).toLocaleDateString()
                           : "—"}
                       </div>
 

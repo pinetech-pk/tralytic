@@ -57,7 +57,7 @@ export default function TradeDetailPage() {
           strategies(name)
         `)
         .eq("id", tradeId)
-        .single() as { data: TradeWithRelations | null; error: any };
+        .single();
 
       if (error) {
         console.error("Error fetching trade:", error);

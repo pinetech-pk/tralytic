@@ -40,7 +40,17 @@ const riskLevelOptions = [
   { value: "high", label: "High" },
 ];
 
-const initialFormData = {
+interface AccountFormData {
+  name: string;
+  account_type: Account["account_type"];
+  risk_level: Account["risk_level"];
+  initial_capital: string;
+  broker: string;
+  description: string;
+  is_default: boolean;
+}
+
+const initialFormData: AccountFormData = {
   name: "",
   account_type: "personal",
   risk_level: "medium",
@@ -86,7 +96,7 @@ export default function AccountsPage() {
     const { data: accountsData, error: accountsError } = await supabase
       .from("accounts")
       .select("*")
-      .order("created_at", { ascending: false }) as { data: Account[] | null; error: any };
+      .order("created_at", { ascending: false });
 
     if (accountsError) {
       console.error("Error fetching accounts:", accountsError);
@@ -101,7 +111,7 @@ export default function AccountsPage() {
           .from("trades")
           .select("pnl, is_winner")
           .eq("account_id", account.id)
-          .eq("status", "closed") as { data: { pnl: number | null; is_winner: boolean | null }[] | null };
+          .eq("status", "closed");
 
         const tradesCount = trades?.length || 0;
         const winningTrades = trades?.filter((t) => t.is_winner)?.length || 0;
@@ -140,7 +150,7 @@ export default function AccountsPage() {
 
     // If setting as default, unset all other defaults first
     if (formData.is_default) {
-      await (supabase.from("accounts") as any)
+      await supabase.from("accounts")
         .update({ is_default: false })
         .eq("user_id", user.id);
     }
@@ -155,7 +165,7 @@ export default function AccountsPage() {
       broker: formData.broker || null,
       description: formData.description || null,
       is_default: formData.is_default,
-    } as any);
+    });
 
     if (error) {
       console.error("Error creating account:", error);
@@ -193,14 +203,14 @@ export default function AccountsPage() {
     if (editFormData.is_default) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await (supabase.from("accounts") as any)
+        await supabase.from("accounts")
           .update({ is_default: false })
           .eq("user_id", user.id);
       }
     }
 
-    const { error } = await (supabase
-      .from("accounts") as any)
+    const { error } = await supabase
+      .from("accounts")
       .update({
         name: editFormData.name,
         account_type: editFormData.account_type,
@@ -234,8 +244,8 @@ export default function AccountsPage() {
     if (!selectedAccount) return;
     setSubmitting(true);
 
-    const { error } = await (supabase
-      .from("accounts") as any)
+    const { error } = await supabase
+      .from("accounts")
       .delete()
       .eq("id", selectedAccount.id);
 
@@ -257,11 +267,11 @@ export default function AccountsPage() {
     if (!user) return;
 
     // Unset all defaults for this user, then set the selected one
-    await (supabase.from("accounts") as any)
+    await supabase.from("accounts")
       .update({ is_default: false })
       .eq("user_id", user.id);
 
-    await (supabase.from("accounts") as any)
+    await supabase.from("accounts")
       .update({ is_default: true })
       .eq("id", account.id);
 
@@ -306,7 +316,7 @@ export default function AccountsPage() {
                       id="type"
                       options={accountTypeOptions}
                       value={formData.account_type}
-                      onChange={(e) => setFormData({ ...formData, account_type: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, account_type: e.target.value as AccountFormData["account_type"] })}
                     />
                   </div>
                   <div className="space-y-2">
@@ -315,7 +325,7 @@ export default function AccountsPage() {
                       id="risk"
                       options={riskLevelOptions}
                       value={formData.risk_level}
-                      onChange={(e) => setFormData({ ...formData, risk_level: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, risk_level: e.target.value as AccountFormData["risk_level"] })}
                     />
                   </div>
                 </div>
@@ -409,7 +419,7 @@ export default function AccountsPage() {
                     id="edit-type"
                     options={accountTypeOptions}
                     value={editFormData.account_type}
-                    onChange={(e) => setEditFormData({ ...editFormData, account_type: e.target.value })}
+                    onChange={(e) => setEditFormData({ ...editFormData, account_type: e.target.value as AccountFormData["account_type"] })}
                   />
                 </div>
                 <div className="space-y-2">
@@ -418,7 +428,7 @@ export default function AccountsPage() {
                     id="edit-risk"
                     options={riskLevelOptions}
                     value={editFormData.risk_level}
-                    onChange={(e) => setEditFormData({ ...editFormData, risk_level: e.target.value })}
+                    onChange={(e) => setEditFormData({ ...editFormData, risk_level: e.target.value as AccountFormData["risk_level"] })}
                   />
                 </div>
               </div>
