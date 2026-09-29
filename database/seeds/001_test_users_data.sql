@@ -25,6 +25,7 @@ DECLARE
 
   acc_binance   UUID;
   acc_ftmo      UUID;
+  acc_old       UUID;
   acc_ic        UUID;
   acc_backtest  UUID;
   acc_zerodha   UUID;
@@ -68,6 +69,14 @@ BEGIN
   VALUES (u_scalper, 'FTMO 10k Challenge', 'Funded evaluation account', 10000, 10920,
           'funded', 'medium', 'FTMO', TRUE, FALSE)
   RETURNING id INTO acc_ftmo;
+
+  -- Holds the entire weaker "v1 system" era, so archiving this one account
+  -- cleanly removes that era from current analytics.
+  INSERT INTO public.accounts (user_id, name, description, initial_capital, current_balance,
+                               account_type, risk_level, broker, is_active, is_default)
+  VALUES (u_scalper, 'Binance Futures (v1 system)', 'Pre-upgrade scalping, kept for reference',
+          5000, 4460, 'personal', 'high', 'Binance', TRUE, FALSE)
+  RETURNING id INTO acc_old;
 
   INSERT INTO public.strategies (user_id, name, description, tags, entry_criteria, is_active, is_default)
   VALUES (u_scalper, 'ORB Breakout', 'Opening range breakout on the 1m',
@@ -118,7 +127,11 @@ BEGIN
   )
   SELECT
     u_scalper,
-    CASE WHEN c.r_account < 0.72 THEN acc_binance ELSE acc_ftmo END,
+    CASE
+      WHEN NOT c.new_era THEN acc_old
+      WHEN c.r_account < 0.72 THEN acc_binance
+      ELSE acc_ftmo
+    END,
     -- ~12% of trades are deliberately strategy-less
     CASE
       WHEN c.r_strategy < 0.12 THEN NULL
