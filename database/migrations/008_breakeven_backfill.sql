@@ -1,5 +1,12 @@
 -- ============================================================
 -- Migration: 008_breakeven_backfill
+--
+-- SUPERSEDED BY 009. This backfill is a no-op on its own: the
+-- calculate_trade_winner trigger recomputes is_winner on UPDATE and
+-- immediately reverts every row this touches. 009 fixes the trigger
+-- first and then repeats the backfill. Kept for history; running it
+-- changes nothing either way.
+--
 -- Description: Existing break-even trades are recorded as losses.
 --
 -- is_winner was derived as `pnl > 0`, so a trade that closed exactly

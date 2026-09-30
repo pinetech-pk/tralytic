@@ -11,7 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { DirectionBadge } from "@/components/shared/direction-badge";
 import { SessionBadge } from "@/components/shared/session-badge";
 import { ResultBadge } from "@/components/shared/result-badge";
-import { formatCurrency, formatDateTime, formatPercent } from "@/lib/utils";
+import {
+  formatCurrency,
+  formatDateTime,
+  formatPercent,
+  tradeResult,
+} from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import type { Trade } from "@/lib/types/database";
 
@@ -141,7 +146,9 @@ export default function TradeDetailPage() {
                   <Badge variant={statusColor} className="capitalize">
                     {trade.status}
                   </Badge>
-                  {trade.is_winner != null && <ResultBadge isWinner={trade.is_winner} />}
+                  {trade.pnl != null && (
+                    <ResultBadge result={tradeResult(trade.pnl, trade.is_winner)} />
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -244,11 +251,7 @@ export default function TradeDetailPage() {
                 )}
               </Field>
               <Field label="Result">
-                {trade.is_winner != null ? (
-                  <ResultBadge isWinner={trade.is_winner} />
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
+                <ResultBadge result={tradeResult(trade.pnl, trade.is_winner)} />
               </Field>
             </CardContent>
           </Card>

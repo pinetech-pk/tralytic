@@ -179,7 +179,7 @@ export function buildTrades(
       (pnl != null && riskAmount != null && riskAmount !== 0 ? round2(pnl / riskAmount) : null);
 
     const winMapped = parseWinLoss(get(row, "is_winner"));
-    const isWinner = winMapped !== null ? winMapped : deriveIsWinner(pnl ?? null);
+    const isWinner = winMapped !== null ? winMapped : deriveIsWinner(pnl ?? null, riskAmount ?? null);
 
     const pnlPercent =
       parseNumber(get(row, "pnl_percent")) ??
