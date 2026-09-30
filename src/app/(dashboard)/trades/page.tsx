@@ -28,7 +28,7 @@ import { SessionBadge } from "@/components/shared/session-badge";
 import { DirectionBadge } from "@/components/shared/direction-badge";
 import { ResultBadge } from "@/components/shared/result-badge";
 import { EmptyState } from "@/components/shared/empty-state";
-import { formatDate, formatCurrency } from "@/lib/utils";
+import { formatDate, formatCurrency, tradeResult } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import type { Trade, Account, Strategy } from "@/lib/types/database";
 
@@ -61,6 +61,7 @@ const RESULT_OPTIONS = [
   { value: "", label: "All Results" },
   { value: "win", label: "Winners" },
   { value: "loss", label: "Losers" },
+  { value: "breakeven", label: "Break-even" },
 ];
 
 export default function TradesPage() {
@@ -149,6 +150,11 @@ export default function TradesPage() {
     if (selectedDirection) query = query.eq("direction", selectedDirection);
     if (selectedResult === "win") query = query.eq("is_winner", true);
     else if (selectedResult === "loss") query = query.eq("is_winner", false);
+    // Break-even is is_winner NULL with a recorded P&L; NULL P&L means
+    // the trade simply has no result yet.
+    else if (selectedResult === "breakeven") {
+      query = query.is("is_winner", null).not("pnl", "is", null);
+    }
     if (debouncedSearch) {
       query = query.or(
         `title.ilike.%${debouncedSearch}%,security.ilike.%${debouncedSearch}%`
@@ -564,11 +570,9 @@ export default function TradesPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {trade.is_winner != null ? (
-                          <ResultBadge isWinner={trade.is_winner} />
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
+                        <ResultBadge
+                          result={tradeResult(trade.pnl, trade.is_winner)}
+                        />
                       </TableCell>
                       <TableCell className="text-center">
                         {trade.chart_url ? (

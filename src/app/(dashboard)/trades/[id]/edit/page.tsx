@@ -246,7 +246,10 @@ export default function EditTradePage() {
 
     try {
       const pnlValue = formData.pnl ? parseFloat(formData.pnl) : null;
-      const isWinner = deriveIsWinner(pnlValue);
+      const riskValue = formData.riskAmount
+        ? parseFloat(formData.riskAmount)
+        : null;
+      const isWinner = deriveIsWinner(pnlValue, riskValue);
 
       const updateData = {
         account_id: formData.accountId || null,

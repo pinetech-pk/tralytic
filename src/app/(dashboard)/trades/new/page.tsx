@@ -221,7 +221,10 @@ export default function NewTradePage() {
       }
 
       const pnlValue = formData.pnl ? parseFloat(formData.pnl) : null;
-      const isWinner = deriveIsWinner(pnlValue);
+      const riskValue = formData.riskAmount
+        ? parseFloat(formData.riskAmount)
+        : null;
+      const isWinner = deriveIsWinner(pnlValue, riskValue);
 
       const tradeData: TradeInsert = {
         user_id: user.id,

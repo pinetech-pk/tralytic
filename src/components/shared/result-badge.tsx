@@ -1,19 +1,30 @@
 import { Badge } from "@/components/ui/badge";
-import { Check, X } from "lucide-react";
+import { Check, X, Minus } from "lucide-react";
+import type { TradeResult } from "@/lib/utils";
 
 interface ResultBadgeProps {
-  isWinner: boolean | null;
+  result: TradeResult;
 }
 
-export function ResultBadge({ isWinner }: ResultBadgeProps) {
-  if (isWinner === null) {
-    return <Badge variant="secondary">Pending</Badge>;
+export function ResultBadge({ result }: ResultBadgeProps) {
+  if (result === "unknown") {
+    return <span className="text-muted-foreground">-</span>;
   }
 
+  if (result === "breakeven") {
+    return (
+      <Badge variant="secondary" className="gap-1">
+        <Minus className="h-3 w-3" />
+        B/E
+      </Badge>
+    );
+  }
+
+  const isWin = result === "win";
   return (
-    <Badge variant={isWinner ? "success" : "danger"} className="gap-1">
-      {isWinner ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-      {isWinner ? "WIN" : "LOSS"}
+    <Badge variant={isWin ? "success" : "danger"} className="gap-1">
+      {isWin ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+      {isWin ? "WIN" : "LOSS"}
     </Badge>
   );
 }
