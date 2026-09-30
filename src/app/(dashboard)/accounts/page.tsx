@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Plus, Wallet, MoreVertical, Loader2, Pencil, Trash2, Star, Archive, ArchiveRestore } from "lucide-react";
+import { Plus, Wallet, MoreVertical, Loader2, Pencil, Trash2, Star, Archive, ArchiveRestore, Download } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +21,12 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { createClient } from "@/lib/supabase/client";
 import type { Account } from "@/lib/types/database";
 import { winRate } from "@/lib/utils";
+import {
+  downloadCsv,
+  slugify,
+  tradesToCsv,
+  type ExportableTrade,
+} from "@/lib/export/csv";
 
 interface AccountWithStats extends Account {
   trades_count?: number;
@@ -70,6 +76,8 @@ export default function AccountsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<AccountWithStats | null>(null);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Form state
@@ -282,6 +290,50 @@ export default function AccountsPage() {
     fetchAccounts();
   };
 
+  // Export every trade on the account, paged so a large account is not
+  // silently truncated by PostgREST's default row cap.
+  const handleExportCsv = async (account: AccountWithStats) => {
+    setActiveMenu(null);
+    setExportingId(account.id);
+
+    try {
+      const PAGE = 1000;
+      const rows: ExportableTrade[] = [];
+
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from("trades")
+          .select("*, strategies(name)")
+          .eq("account_id", account.id)
+          .order("entry_date", { ascending: true })
+          .range(from, from + PAGE - 1);
+
+        if (error) throw error;
+        rows.push(...((data ?? []) as ExportableTrade[]));
+        if (!data || data.length < PAGE) break;
+      }
+
+      if (rows.length === 0) {
+        setExportError(`"${account.name}" has no trades to export.`);
+        return;
+      }
+
+      const date = new Date().toISOString().slice(0, 10);
+      downloadCsv(
+        `tralytic-${slugify(account.name)}-${date}.csv`,
+        tradesToCsv(rows)
+      );
+      setExportError(null);
+    } catch (error) {
+      console.error("Error exporting trades:", error);
+      setExportError(
+        error instanceof Error ? error.message : "Failed to export trades"
+      );
+    } finally {
+      setExportingId(null);
+    }
+  };
+
   // Archiving keeps the account's history browsable but drops its trades
   // out of current analytics. An archived account can't be the default.
   const handleToggleArchived = async (account: AccountWithStats) => {
@@ -313,6 +365,11 @@ export default function AccountsPage() {
       />
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
+        {exportError && (
+          <div className="rounded-md border border-red/40 bg-red/10 px-4 py-3 text-sm text-red">
+            {exportError}
+          </div>
+        )}
         <div className="flex justify-end">
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
@@ -653,6 +710,18 @@ export default function AccountsPage() {
                               Set as Default
                             </button>
                           )}
+                          <button
+                            className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted/50 transition-colors disabled:opacity-50"
+                            onClick={() => handleExportCsv(account)}
+                            disabled={exportingId === account.id}
+                          >
+                            {exportingId === account.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                            Export CSV
+                          </button>
                           <button
                             className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
                             onClick={() => handleToggleArchived(account)}
