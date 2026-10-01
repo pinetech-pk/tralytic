@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
-import type { Account } from "@/lib/types/database";
+import type { Account, Strategy } from "@/lib/types/database";
 import { FIELD_OPTIONS, type FieldKey } from "@/lib/import/fields";
 import { parseCsv, autoMap } from "@/lib/import/parse";
 import {
@@ -57,6 +57,8 @@ const MARKET_OPTIONS = [
   { value: "options", label: "Options" },
 ];
 
+const NEW_STRATEGY = "__new__";
+
 const ACCOUNT_TYPE_OPTIONS = [
   { value: "personal", label: "Personal" },
   { value: "funded", label: "Funded" },
@@ -76,6 +78,9 @@ export default function ImportPage() {
   // collected on the details step instead of mapped from columns.
   const [tvSecurity, setTvSecurity] = useState("");
   const [tvTimeframe, setTvTimeframe] = useState("");
+  // Picked from existing strategies, NEW_STRATEGY, or "" for none. Free text
+  // would fork a backtest in two on any spelling variation between sessions.
+  const [tvStrategyChoice, setTvStrategyChoice] = useState("");
   const [tvStrategy, setTvStrategy] = useState("");
   const [tvRisk, setTvRisk] = useState("");
   const [tvInferredRisk, setTvInferredRisk] = useState<number | null>(null);
@@ -93,6 +98,7 @@ export default function ImportPage() {
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [targetAccountId, setTargetAccountId] = useState("");
   const [defaultMarket, setDefaultMarket] = useState<Market>("crypto");
   const [timezone, setTimezone] = useState<ImportTimezone>("local");
@@ -135,6 +141,19 @@ export default function ImportPage() {
       }
     }
     fetchAccounts();
+  }, [supabase]);
+
+  // Existing strategies, so a repeat import lands on the same one.
+  useEffect(() => {
+    async function fetchStrategies() {
+      const { data } = await supabase
+        .from("strategies")
+        .select("*")
+        .eq("is_active", true)
+        .order("name");
+      if (data) setStrategies(data);
+    }
+    fetchStrategies();
   }, [supabase]);
 
   const selectedAccount = accounts.find((a) => a.id === targetAccountId) ?? null;
@@ -242,6 +261,21 @@ export default function ImportPage() {
   const mappedFields = Object.values(mapping);
   const missingRequired = REQUIRED_FIELDS.filter((k) => !mappedFields.includes(k));
 
+  /**
+   * resolveStrategies matches on name, so handing back an existing strategy's
+   * exact name reuses it rather than creating a near-duplicate.
+   */
+  const tvStrategyName =
+    tvStrategyChoice === NEW_STRATEGY
+      ? tvStrategy.trim() || null
+      : tvStrategyChoice
+        ? (strategies.find((s) => s.id === tvStrategyChoice)?.name ?? null)
+        : null;
+
+  const tvDetailsIncomplete =
+    !tvSecurity.trim() ||
+    (tvStrategyChoice === NEW_STRATEGY && !tvStrategy.trim());
+
   const handlePreview = () => {
     const balance = selectedAccount?.current_balance ?? 0;
 
@@ -251,7 +285,7 @@ export default function ImportPage() {
           security: tvSecurity.trim(),
           market: defaultMarket,
           timeframe: tvTimeframe.trim() || null,
-          strategyName: tvStrategy.trim() || null,
+          strategyName: tvStrategyName,
           riskAmount: tvRisk ? parseFloat(tvRisk) : null,
           timezone,
           accountBalance: balance,
@@ -288,6 +322,14 @@ export default function ImportPage() {
       const res = await insertTrades(supabase, user.id, targetAccountId, build.valid, strategyMap);
       setResult(res);
       setStep("complete");
+
+      // A strategy created by this import should be pickable on the next one.
+      const { data: refreshed } = await supabase
+        .from("strategies")
+        .select("*")
+        .eq("is_active", true)
+        .order("name");
+      if (refreshed) setStrategies(refreshed);
     } catch (err) {
       setResult({
         inserted: 0,
@@ -312,6 +354,7 @@ export default function ImportPage() {
     setTvSecurity("");
     setTvTimeframe("");
     setTvStrategy("");
+    setTvStrategyChoice("");
     setTvRisk("");
     setTvInferredRisk(null);
   };
@@ -598,15 +641,33 @@ export default function ImportPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="tv-strategy">Strategy</Label>
-                    <Input
+                    <Select
                       id="tv-strategy"
-                      placeholder="50+200 EMA Ribbon Pullback"
-                      value={tvStrategy}
-                      onChange={(e) => setTvStrategy(e.target.value)}
+                      options={[
+                        { value: "", label: "— No Strategy —" },
+                        ...strategies.map((s) => ({ value: s.id, label: s.name })),
+                        { value: NEW_STRATEGY, label: "+ Create new strategy…" },
+                      ]}
+                      value={tvStrategyChoice}
+                      onChange={(e) => setTvStrategyChoice(e.target.value)}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Created if it does not exist. Leave blank for No Strategy.
-                    </p>
+                    {tvStrategyChoice === NEW_STRATEGY ? (
+                      <>
+                        <Input
+                          placeholder="50+200 EMA Ribbon Pullback"
+                          value={tvStrategy}
+                          onChange={(e) => setTvStrategy(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Created on import, then available to pick next time.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Pick the existing strategy so repeat imports build up on
+                        the same one.
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="tv-risk">Risk per trade (USD)</Label>
@@ -640,7 +701,7 @@ export default function ImportPage() {
                   <Button variant="outline" onClick={() => setStep("upload")}>
                     Back
                   </Button>
-                  <Button onClick={handlePreview} disabled={!tvSecurity.trim()}>
+                  <Button onClick={handlePreview} disabled={tvDetailsIncomplete}>
                     Preview Import
                     <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
