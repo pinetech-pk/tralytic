@@ -14,18 +14,40 @@ import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import type { Account } from "@/lib/types/database";
 import { FIELD_OPTIONS, type FieldKey } from "@/lib/import/fields";
 import { parseCsv, autoMap } from "@/lib/import/parse";
-import { buildTrades, type BuildResult } from "@/lib/import/transform";
+import {
+  buildTrades,
+  type BuildResult,
+  type ImportTimezone,
+} from "@/lib/import/transform";
+import {
+  isTradingViewExport,
+  symbolFromFilename,
+  inferRiskFromStops,
+  buildTradingViewTrades,
+} from "@/lib/import/sources/tradingview";
 import { resolveStrategies, insertTrades, type InsertResult } from "@/lib/import/import";
 import { formatPnL } from "@/lib/utils/format";
 
 type ImportStep = "upload" | "mapping" | "preview" | "complete";
 
 type Market = "crypto" | "forex" | "stocks" | "futures" | "options";
+
+/**
+ * Each source needs its own shaping before the generic preview. Adding a
+ * broker later means a new entry here plus a module under import/sources.
+ */
+type ImportSource = "generic" | "tradingview";
+
+const SOURCE_OPTIONS = [
+  { value: "generic", label: "Generic CSV (Notion, Excel, custom)" },
+  { value: "tradingview", label: "TradingView (Strategy Tester / Replay)" },
+];
 
 const MARKET_OPTIONS = [
   { value: "crypto", label: "Crypto" },
@@ -35,11 +57,11 @@ const MARKET_OPTIONS = [
   { value: "options", label: "Options" },
 ];
 
-const STEPS: { id: ImportStep; label: string }[] = [
-  { id: "upload", label: "Upload" },
-  { id: "mapping", label: "Map Columns" },
-  { id: "preview", label: "Preview" },
-  { id: "complete", label: "Complete" },
+const ACCOUNT_TYPE_OPTIONS = [
+  { value: "personal", label: "Personal" },
+  { value: "funded", label: "Funded" },
+  { value: "demo", label: "Demo" },
+  { value: "backtest", label: "Backtest" },
 ];
 
 const REQUIRED_FIELDS: FieldKey[] = ["security", "entry_date"];
@@ -48,6 +70,23 @@ export default function ImportPage() {
   const supabase = createClient();
 
   const [step, setStep] = useState<ImportStep>("upload");
+  const [source, setSource] = useState<ImportSource>("generic");
+
+  // TradingView exports carry no instrument, timeframe or risk, so those are
+  // collected on the details step instead of mapped from columns.
+  const [tvSecurity, setTvSecurity] = useState("");
+  const [tvTimeframe, setTvTimeframe] = useState("");
+  const [tvStrategy, setTvStrategy] = useState("");
+  const [tvRisk, setTvRisk] = useState("");
+  const [tvInferredRisk, setTvInferredRisk] = useState<number | null>(null);
+
+  // Inline account creation
+  const [creatingAccount, setCreatingAccount] = useState(false);
+  const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountCapital, setNewAccountCapital] = useState("");
+  const [newAccountType, setNewAccountType] = useState("backtest");
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
 
   // Upload
   const [file, setFile] = useState<File | null>(null);
@@ -56,6 +95,7 @@ export default function ImportPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [targetAccountId, setTargetAccountId] = useState("");
   const [defaultMarket, setDefaultMarket] = useState<Market>("crypto");
+  const [timezone, setTimezone] = useState<ImportTimezone>("local");
 
   // Parsed CSV
   const [headers, setHeaders] = useState<string[]>([]);
@@ -68,6 +108,17 @@ export default function ImportPage() {
   // Import
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<InsertResult | null>(null);
+
+  // Read after mount: the server's offset is not the browser's, and rendering
+  // it during SSR would mismatch on hydration.
+  const [localOffset, setLocalOffset] = useState("");
+  useEffect(() => {
+    const mins = -new Date().getTimezoneOffset();
+    const sign = mins >= 0 ? "+" : "-";
+    const h = Math.floor(Math.abs(mins) / 60);
+    const m = Math.abs(mins) % 60;
+    setLocalOffset(`UTC${sign}${h}${m ? `:${String(m).padStart(2, "0")}` : ""}`);
+  }, []);
 
   // Fetch active accounts for the target-account selector.
   useEffect(() => {
@@ -88,6 +139,64 @@ export default function ImportPage() {
 
   const selectedAccount = accounts.find((a) => a.id === targetAccountId) ?? null;
 
+  const steps: { id: ImportStep; label: string }[] = [
+    { id: "upload", label: "Upload" },
+    {
+      id: "mapping",
+      label: source === "tradingview" ? "Trade Details" : "Map Columns",
+    },
+    { id: "preview", label: "Preview" },
+    { id: "complete", label: "Complete" },
+  ];
+
+  const handleCreateAccount = async () => {
+    if (!newAccountName.trim()) {
+      setAccountError("Give the account a name.");
+      return;
+    }
+    setAccountSaving(true);
+    setAccountError(null);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setAccountError("You must be signed in to create an account.");
+        return;
+      }
+
+      const capital = parseFloat(newAccountCapital) || 0;
+      const { data, error } = await supabase
+        .from("accounts")
+        .insert({
+          user_id: user.id,
+          name: newAccountName.trim(),
+          initial_capital: capital,
+          current_balance: capital,
+          account_type: newAccountType as Account["account_type"],
+        })
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      setAccounts((prev) =>
+        [...prev, data].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setTargetAccountId(data.id);
+      setCreatingAccount(false);
+      setNewAccountName("");
+      setNewAccountCapital("");
+    } catch (err) {
+      setAccountError(
+        err instanceof Error ? err.message : "Failed to create account."
+      );
+    } finally {
+      setAccountSaving(false);
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
@@ -107,7 +216,21 @@ export default function ImportPage() {
       }
       setHeaders(hdrs);
       setRows(parsedRows);
-      setMapping(autoMap(hdrs));
+
+      // Trust the file's own shape over the dropdown — a TradingView export
+      // cannot be column-mapped, so detection wins either way.
+      const looksLikeTradingView = isTradingViewExport(hdrs);
+      if (looksLikeTradingView) {
+        setSource("tradingview");
+        setTvSecurity((prev) => prev || symbolFromFilename(file.name) || "");
+        const risk = inferRiskFromStops(parsedRows, hdrs);
+        setTvInferredRisk(risk);
+        setTvRisk((prev) => prev || (risk != null ? String(risk) : ""));
+      } else {
+        if (source === "tradingview") setSource("generic");
+        setMapping(autoMap(hdrs));
+      }
+
       setStep("mapping");
     } catch (err) {
       setParseError(err instanceof Error ? err.message : "Failed to parse CSV file.");
@@ -121,7 +244,29 @@ export default function ImportPage() {
 
   const handlePreview = () => {
     const balance = selectedAccount?.current_balance ?? 0;
-    setBuild(buildTrades(rows, mapping, { accountBalance: balance, defaultMarket }));
+
+    if (source === "tradingview") {
+      setBuild(
+        buildTradingViewTrades(rows, headers, {
+          security: tvSecurity.trim(),
+          market: defaultMarket,
+          timeframe: tvTimeframe.trim() || null,
+          strategyName: tvStrategy.trim() || null,
+          riskAmount: tvRisk ? parseFloat(tvRisk) : null,
+          timezone,
+          accountBalance: balance,
+        })
+      );
+    } else {
+      setBuild(
+        buildTrades(rows, mapping, {
+          accountBalance: balance,
+          defaultMarket,
+          timezone,
+        })
+      );
+    }
+
     setStep("preview");
   };
 
@@ -164,6 +309,11 @@ export default function ImportPage() {
     setBuild(null);
     setResult(null);
     setParseError(null);
+    setTvSecurity("");
+    setTvTimeframe("");
+    setTvStrategy("");
+    setTvRisk("");
+    setTvInferredRisk(null);
   };
 
   return (
@@ -174,8 +324,8 @@ export default function ImportPage() {
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Progress Steps */}
           <div className="flex items-center justify-center gap-4 mb-8">
-            {STEPS.map((s, index) => {
-              const currentIndex = STEPS.findIndex((x) => x.id === step);
+            {steps.map((s, index) => {
+              const currentIndex = steps.findIndex((x) => x.id === step);
               return (
                 <div key={s.id} className="flex items-center gap-2">
                   <div
@@ -196,7 +346,7 @@ export default function ImportPage() {
                   >
                     {s.label}
                   </span>
-                  {index < STEPS.length - 1 && (
+                  {index < steps.length - 1 && (
                     <ArrowRight className="h-4 w-4 text-muted-foreground mx-2" />
                   )}
                 </div>
@@ -214,6 +364,20 @@ export default function ImportPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="source">Data source</Label>
+                  <Select
+                    id="source"
+                    options={SOURCE_OPTIONS}
+                    value={source}
+                    onChange={(e) => setSource(e.target.value as ImportSource)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    TradingView exports one row per fill; they are paired into
+                    single trades automatically. Detected from the file too.
+                  </p>
+                </div>
+
                 <div
                   className="border-2 border-dashed rounded-lg p-12 text-center hover:border-primary/50 transition-colors cursor-pointer"
                   onClick={() => document.getElementById("file-input")?.click()}
@@ -252,27 +416,91 @@ export default function ImportPage() {
                     </div>
 
                     {/* Target account + default market */}
-                    {accounts.length === 0 ? (
-                      <div className="flex items-center gap-3 p-4 bg-yellow/10 border border-yellow/30 rounded-lg">
-                        <AlertTriangle className="h-5 w-5 text-yellow shrink-0" />
-                        <p className="text-sm">
-                          You need at least one trading account before importing.{" "}
-                          <a href="/accounts" className="underline font-medium">
-                            Create an account
-                          </a>
-                          .
-                        </p>
+                    {creatingAccount ? (
+                      <div className="space-y-4 p-4 border rounded-lg">
+                        <p className="font-medium text-sm">New account</p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="new-account-name">Name *</Label>
+                            <Input
+                              id="new-account-name"
+                              placeholder="EMA Ribbon Backtest"
+                              value={newAccountName}
+                              onChange={(e) => setNewAccountName(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="new-account-capital">Starting capital</Label>
+                            <Input
+                              id="new-account-capital"
+                              type="number"
+                              step="0.01"
+                              placeholder="100.00"
+                              value={newAccountCapital}
+                              onChange={(e) => setNewAccountCapital(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="new-account-type">Type</Label>
+                            <Select
+                              id="new-account-type"
+                              options={ACCOUNT_TYPE_OPTIONS}
+                              value={newAccountType}
+                              onChange={(e) => setNewAccountType(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        {accountError && (
+                          <p className="text-sm text-red">{accountError}</p>
+                        )}
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setCreatingAccount(false);
+                              setAccountError(null);
+                            }}
+                            disabled={accountSaving}
+                          >
+                            Cancel
+                          </Button>
+                          <Button size="sm" onClick={handleCreateAccount} disabled={accountSaving}>
+                            {accountSaving && (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            )}
+                            Create account
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="account">Import into account *</Label>
-                          <Select
-                            id="account"
-                            options={accounts.map((a) => ({ value: a.id, label: a.name }))}
-                            value={targetAccountId}
-                            onChange={(e) => setTargetAccountId(e.target.value)}
-                          />
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="account">Import into account *</Label>
+                            <button
+                              type="button"
+                              className="text-xs text-primary hover:underline"
+                              onClick={() => setCreatingAccount(true)}
+                            >
+                              + New account
+                            </button>
+                          </div>
+                          {accounts.length === 0 ? (
+                            <div className="flex items-center gap-2 p-3 bg-yellow/10 border border-yellow/30 rounded-lg">
+                              <AlertTriangle className="h-4 w-4 text-yellow shrink-0" />
+                              <p className="text-xs">
+                                No accounts yet — create one above to continue.
+                              </p>
+                            </div>
+                          ) : (
+                            <Select
+                              id="account"
+                              options={accounts.map((a) => ({ value: a.id, label: a.name }))}
+                              value={targetAccountId}
+                              onChange={(e) => setTargetAccountId(e.target.value)}
+                            />
+                          )}
                           {selectedAccount && (
                             <p className="text-xs text-muted-foreground">
                               Balance ${selectedAccount.current_balance.toFixed(2)} — used to derive
@@ -290,6 +518,29 @@ export default function ImportPage() {
                           />
                           <p className="text-xs text-muted-foreground">
                             Applied when a row has no market column.
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="timezone">Timestamps are in</Label>
+                          <Select
+                            id="timezone"
+                            options={[
+                              {
+                                value: "local",
+                                label: localOffset
+                                  ? `My local time (${localOffset})`
+                                  : "My local time",
+                              },
+                              { value: "utc", label: "UTC" },
+                            ]}
+                            value={timezone}
+                            onChange={(e) =>
+                              setTimezone(e.target.value as ImportTimezone)
+                            }
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Times without a zone are read this way. Affects the
+                            session each trade lands in.
                           </p>
                         </div>
                       </div>
@@ -311,8 +562,95 @@ export default function ImportPage() {
             </Card>
           )}
 
-          {/* Step 2: Column Mapping */}
-          {step === "mapping" && (
+          {/* Step 2a: TradingView details — these are not in the export */}
+          {step === "mapping" && source === "tradingview" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Trade Details</CardTitle>
+                <CardDescription>
+                  Paired {rows.length} rows into {Math.ceil(rows.length / 2)} trades.
+                  TradingView does not export the instrument, timeframe or risk, so
+                  add them here — they apply to every trade in this file.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="tv-security">Security / symbol *</Label>
+                    <Input
+                      id="tv-security"
+                      placeholder="NEARUSDT.P"
+                      value={tvSecurity}
+                      onChange={(e) => setTvSecurity(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Read from the filename — edit if it guessed wrong.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="tv-timeframe">Timeframe</Label>
+                    <Input
+                      id="tv-timeframe"
+                      placeholder="5m"
+                      value={tvTimeframe}
+                      onChange={(e) => setTvTimeframe(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="tv-strategy">Strategy</Label>
+                    <Input
+                      id="tv-strategy"
+                      placeholder="50+200 EMA Ribbon Pullback"
+                      value={tvStrategy}
+                      onChange={(e) => setTvStrategy(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Created if it does not exist. Leave blank for No Strategy.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="tv-risk">Risk per trade (USD)</Label>
+                    <Input
+                      id="tv-risk"
+                      type="number"
+                      step="0.01"
+                      placeholder="1.00"
+                      value={tvRisk}
+                      onChange={(e) => setTvRisk(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {tvInferredRisk != null
+                        ? `Suggested ${tvInferredRisk} — the median loss on stop-loss exits, which is what you risked.`
+                        : "Not in the export. Without it these trades have no RRx."}
+                    </p>
+                  </div>
+                </div>
+
+                {!tvRisk && (
+                  <div className="flex items-center gap-3 p-4 bg-yellow/10 border border-yellow/30 rounded-lg">
+                    <AlertTriangle className="h-5 w-5 text-yellow shrink-0" />
+                    <p className="text-sm">
+                      Without a risk figure these trades import with no RRx, so they
+                      will not contribute to risk-adjusted analysis.
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex justify-between pt-4">
+                  <Button variant="outline" onClick={() => setStep("upload")}>
+                    Back
+                  </Button>
+                  <Button onClick={handlePreview} disabled={!tvSecurity.trim()}>
+                    Preview Import
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Step 2b: Column Mapping */}
+          {step === "mapping" && source === "generic" && (
             <Card>
               <CardHeader>
                 <CardTitle>Map Columns</CardTitle>
