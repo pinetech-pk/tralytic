@@ -27,6 +27,8 @@ export interface BuildResult {
 export interface BuildOptions {
   accountBalance: number;
   defaultMarket: Market;
+  /** How to read timestamps that carry no timezone. */
+  timezone: ImportTimezone;
 }
 
 const DATE_FORMATS = [
@@ -58,18 +60,45 @@ export function parseNumber(raw: string | undefined | null): number | null {
   return negative ? -n : n;
 }
 
+/** How to read a timestamp that carries no timezone of its own. */
+export type ImportTimezone = "local" | "utc";
+
+/** "…Z" or "…+05:00" — the string already says which zone it is in. */
+function hasExplicitZone(s: string): boolean {
+  return /([zZ]|[+-]\d{2}:?\d{2})$/.test(s);
+}
+
+/**
+ * Date constructors and date-fns both read a naive string as local time.
+ * Shifting by the runtime's offset reinterprets that same wall-clock
+ * reading as UTC instead.
+ */
+function asUtcInstant(d: Date): Date {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+}
+
 /** Parse a date string into a full ISO string, or null if unparseable. */
-export function parseDate(raw: string | undefined | null): string | null {
+export function parseDate(
+  raw: string | undefined | null,
+  tz: ImportTimezone = "local"
+): string | null {
   if (raw == null) return null;
   const s = raw.trim();
   if (!s) return null;
 
+  // A string that names its own offset is unambiguous; never reinterpret it.
+  const reinterpret = tz === "utc" && !hasExplicitZone(s);
+
   const native = new Date(s);
-  if (!Number.isNaN(native.getTime())) return native.toISOString();
+  if (!Number.isNaN(native.getTime())) {
+    return (reinterpret ? asUtcInstant(native) : native).toISOString();
+  }
 
   for (const fmt of DATE_FORMATS) {
     const d = parseDateFns(s, fmt, new Date());
-    if (isValid(d)) return d.toISOString();
+    if (isValid(d)) {
+      return (reinterpret ? asUtcInstant(d) : d).toISOString();
+    }
   }
   return null;
 }
@@ -154,7 +183,7 @@ export function buildTrades(
     }
 
     const entryRaw = get(row, "entry_date");
-    const entryDate = parseDate(entryRaw);
+    const entryDate = parseDate(entryRaw, opts.timezone);
     if (!entryDate) {
       errors.push({ row: rowNum, message: `Invalid or missing entry date${entryRaw ? ` ("${entryRaw}")` : ""}` });
       return;
@@ -201,7 +230,7 @@ export function buildTrades(
       market,
       direction,
       entry_date: entryDate,
-      exit_date: parseDate(get(row, "exit_date")),
+      exit_date: parseDate(get(row, "exit_date"), opts.timezone),
       timeframe,
       session,
       entry_price: parseNumber(get(row, "entry_price")),

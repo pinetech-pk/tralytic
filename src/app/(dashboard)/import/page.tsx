@@ -20,7 +20,11 @@ import { createClient } from "@/lib/supabase/client";
 import type { Account } from "@/lib/types/database";
 import { FIELD_OPTIONS, type FieldKey } from "@/lib/import/fields";
 import { parseCsv, autoMap } from "@/lib/import/parse";
-import { buildTrades, type BuildResult } from "@/lib/import/transform";
+import {
+  buildTrades,
+  type BuildResult,
+  type ImportTimezone,
+} from "@/lib/import/transform";
 import {
   isTradingViewExport,
   symbolFromFilename,
@@ -91,6 +95,7 @@ export default function ImportPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [targetAccountId, setTargetAccountId] = useState("");
   const [defaultMarket, setDefaultMarket] = useState<Market>("crypto");
+  const [timezone, setTimezone] = useState<ImportTimezone>("local");
 
   // Parsed CSV
   const [headers, setHeaders] = useState<string[]>([]);
@@ -103,6 +108,17 @@ export default function ImportPage() {
   // Import
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<InsertResult | null>(null);
+
+  // Read after mount: the server's offset is not the browser's, and rendering
+  // it during SSR would mismatch on hydration.
+  const [localOffset, setLocalOffset] = useState("");
+  useEffect(() => {
+    const mins = -new Date().getTimezoneOffset();
+    const sign = mins >= 0 ? "+" : "-";
+    const h = Math.floor(Math.abs(mins) / 60);
+    const m = Math.abs(mins) % 60;
+    setLocalOffset(`UTC${sign}${h}${m ? `:${String(m).padStart(2, "0")}` : ""}`);
+  }, []);
 
   // Fetch active accounts for the target-account selector.
   useEffect(() => {
@@ -237,11 +253,18 @@ export default function ImportPage() {
           timeframe: tvTimeframe.trim() || null,
           strategyName: tvStrategy.trim() || null,
           riskAmount: tvRisk ? parseFloat(tvRisk) : null,
+          timezone,
           accountBalance: balance,
         })
       );
     } else {
-      setBuild(buildTrades(rows, mapping, { accountBalance: balance, defaultMarket }));
+      setBuild(
+        buildTrades(rows, mapping, {
+          accountBalance: balance,
+          defaultMarket,
+          timezone,
+        })
+      );
     }
 
     setStep("preview");
@@ -495,6 +518,29 @@ export default function ImportPage() {
                           />
                           <p className="text-xs text-muted-foreground">
                             Applied when a row has no market column.
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="timezone">Timestamps are in</Label>
+                          <Select
+                            id="timezone"
+                            options={[
+                              {
+                                value: "local",
+                                label: localOffset
+                                  ? `My local time (${localOffset})`
+                                  : "My local time",
+                              },
+                              { value: "utc", label: "UTC" },
+                            ]}
+                            value={timezone}
+                            onChange={(e) =>
+                              setTimezone(e.target.value as ImportTimezone)
+                            }
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Times without a zone are read this way. Affects the
+                            session each trade lands in.
                           </p>
                         </div>
                       </div>

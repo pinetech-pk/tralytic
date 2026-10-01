@@ -5,7 +5,7 @@
 // columns are matched on a normalized prefix rather than an exact name.
 
 import { normalizeHeader } from "../fields";
-import type { BuildResult, ParsedTrade, RowIssue } from "../transform";
+import { parseDate, type BuildResult, type ImportTimezone, type ParsedTrade, type RowIssue } from "../transform";
 import { deriveIsWinner } from "@/lib/utils";
 
 type Market = "crypto" | "forex" | "stocks" | "futures" | "options";
@@ -17,6 +17,8 @@ export interface TradingViewOptions {
   strategyName: string | null;
   /** Applied to every trade; without it imported trades have no RRx. */
   riskAmount: number | null;
+  /** How to read the export timestamps, which carry no offset. */
+  timezone: ImportTimezone;
   accountBalance: number;
 }
 
@@ -66,13 +68,13 @@ function num(raw: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** "2026-09-01 08:50:30" -> ISO, treated as local time like the rest of import. */
-function toIso(raw: string | undefined): string | null {
+/**
+ * "2026-09-01 08:50:30" -> ISO. TradingView writes the chart's timezone with
+ * no offset, so the caller says how to read it.
+ */
+function toIso(raw: string | undefined, tz: ImportTimezone): string | null {
   if (!raw) return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const parsed = new Date(trimmed.replace(" ", "T"));
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  return parseDate(raw.trim().replace(" ", "T"), tz);
 }
 
 interface Leg {
@@ -150,7 +152,7 @@ export function buildTradingViewTrades(
     const leg: Leg = {
       type: (row[typeH] ?? "").trim().toLowerCase(),
       signal: signalH ? (row[signalH] ?? "").trim() || null : null,
-      date: toIso(row[dateH]),
+      date: toIso(row[dateH], opts.timezone),
       price: priceH ? num(row[priceH]) : null,
       qty: qtyH ? num(row[qtyH]) : null,
       pnl: pnlH ? num(row[pnlH]) : null,
