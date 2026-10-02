@@ -9,7 +9,10 @@ import { createClient } from "@/lib/supabase/client";
 import { getDateRange, isWeekendUtc } from "@/lib/utils";
 import type { Account, Trade, Strategy } from "@/lib/types/database";
 import { OverviewTab } from "@/components/analytics/overview-tab";
-import { PerformanceTab } from "@/components/analytics/performance-tab";
+import {
+  PerformanceTab,
+  type PerformanceView,
+} from "@/components/analytics/performance-tab";
 import { StrategyTab } from "@/components/analytics/strategy-tab";
 import { SessionTab } from "@/components/analytics/session-tab";
 
@@ -57,6 +60,9 @@ export default function AnalyticsPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [selectedAccountType, setSelectedAccountType] = useState("personal");
   const [selectedTimeRange, setSelectedTimeRange] = useState("");
+  const [activeTab, setActiveTab] = useState("overview");
+  const [performanceView, setPerformanceView] =
+    useState<PerformanceView>("summary");
   const [selectedStrategy, setSelectedStrategy] = useState("");
   const [excludeWeekends, setExcludeWeekends] = useState(false);
   const [includeArchived, setIncludeArchived] = useState(false);
@@ -137,6 +143,9 @@ export default function AnalyticsPage() {
     }),
     [selectedStrategy, excludeWeekends]
   );
+
+  const showsOwnPeriod =
+    activeTab === "performance" && performanceView === "breakdown";
 
   const weekendCount = useMemo(
     () => trades.filter((t) => isWeekendUtc(t.entry_date)).length,
@@ -251,14 +260,18 @@ export default function AnalyticsPage() {
 
         {/* Period, strategy and weekend filters */}
         <div className="flex flex-wrap items-end gap-4">
-          <div className="w-48 space-y-1">
-            <span className="text-xs text-muted-foreground">Period</span>
-            <Select
-              options={TIME_RANGE_OPTIONS}
-              value={selectedTimeRange}
-              onChange={(e) => setSelectedTimeRange(e.target.value)}
-            />
-          </div>
+          {/* The breakdown table groups by its own weeks or months, so a
+              date range here would be a second, conflicting window. */}
+          {!showsOwnPeriod && (
+            <div className="w-48 space-y-1">
+              <span className="text-xs text-muted-foreground">Period</span>
+              <Select
+                options={TIME_RANGE_OPTIONS}
+                value={selectedTimeRange}
+                onChange={(e) => setSelectedTimeRange(e.target.value)}
+              />
+            </div>
+          )}
 
           <div className="w-64 space-y-1">
             <span className="text-xs text-muted-foreground">Strategy</span>
@@ -294,7 +307,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Analytics Tabs */}
-        <Tabs defaultValue="overview">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="performance">Performance</TabsTrigger>
@@ -316,6 +329,8 @@ export default function AnalyticsPage() {
               includeArchived={includeArchived}
               filters={performanceFilters}
               trades={visibleTrades}
+              view={performanceView}
+              onViewChange={setPerformanceView}
             />
           </TabsContent>
 
