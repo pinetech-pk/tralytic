@@ -1,19 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { PerformancePnLChart } from "@/components/charts/performance-pnl-chart";
-import { PerformanceCumulativeChart } from "@/components/charts/performance-cumulative-chart";
-import { PerformanceTable } from "@/components/analytics/performance-table";
-import {
-  usePerformanceData,
-  type PeriodType,
-  type NumPeriods,
-  type PerformanceFilters,
-} from "@/hooks/use-performance-data";
-import { useRiskMetrics } from "@/hooks/use-risk-metrics";
+import { useTradeMetrics } from "@/hooks/use-trade-metrics";
 import type { Trade } from "@/lib/types/database";
 import {
   TrendingUp,
@@ -61,23 +49,6 @@ function StatCard({
   );
 }
 
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <Skeleton key={i} className="h-[84px] rounded-lg" />
-        ))}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Skeleton className="h-[380px] rounded-lg" />
-        <Skeleton className="h-[380px] rounded-lg" />
-      </div>
-      <Skeleton className="h-[400px] rounded-lg" />
-    </div>
-  );
-}
-
 /** A labelled band of stat cards, so the numbers read as groups not a wall. */
 function StatGroup({
   title,
@@ -102,262 +73,160 @@ function StatGroup({
 }
 
 interface PerformanceTabProps {
-  accountIds?: string[];
-  includeArchived?: boolean;
-  filters?: PerformanceFilters;
-  /** Per-trade data for the risk metrics the period RPC cannot provide. */
+  /** Already scoped by the page-level Period filter. */
   trades: Trade[];
 }
 
-type PerformanceView = "summary" | "breakdown";
+export function PerformanceTab({ trades }: PerformanceTabProps) {
+  // Every card derives from one filtered list, so they cannot disagree
+  // about which window they describe.
+  const m = useTradeMetrics(trades);
 
-export function PerformanceTab({
-  accountIds,
-  includeArchived,
-  filters,
-  trades,
-}: PerformanceTabProps) {
-  const {
-    data,
-    summary,
-    loading,
-    error,
-    periodType,
-    numPeriods,
-    setPeriodType,
-    setNumPeriods,
-  } = usePerformanceData(accountIds, includeArchived, filters);
-
-  const [view, setView] = useState<PerformanceView>("summary");
-  const periodLabel = periodType === "weekly" ? "Weeks" : "Months";
-  const risk = useRiskMetrics(trades);
+  if (trades.length === 0) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center h-48 text-muted-foreground">
+          No trades match the selected filters
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Controls */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-[160px]">
-            <Select
-              value={periodType}
-              onChange={(e) => setPeriodType(e.target.value as PeriodType)}
-              options={[
-                { value: "weekly", label: "Weekly Performance" },
-                { value: "monthly", label: "Monthly Performance" },
-              ]}
-            />
-          </div>
-          <div className="w-[140px]">
-            <Select
-              value={String(numPeriods)}
-              onChange={(e) => setNumPeriods(Number(e.target.value) as NumPeriods)}
-              options={[
-                { value: "12", label: `Last 12 ${periodLabel}` },
-                { value: "24", label: `Last 24 ${periodLabel}` },
-              ]}
-            />
-          </div>
-        </div>
-        {!loading && data.length > 0 && (
-          <p className="text-xs text-muted-foreground">
-            Showing {data.length} {data.length === 1 ? "period" : "periods"} with
-            data &middot; ISO Week Standard (Mon&ndash;Sun)
-          </p>
-        )}
-      </div>
+      {/* RRx first — it is the metric the journal is built around. */}
+            <StatGroup title="Risk-Adjusted Return">
+              <StatCard
+                label="Total RRx"
+                value={`${m.totalRRx >= 0 ? "+" : ""}${m.totalRRx.toFixed(2)}R`}
+                icon={Target}
+                valueColor={m.totalRRx >= 0 ? "text-green" : "text-red"}
+              />
+              <StatCard
+                label="RRx per Trade"
+                value={`${m.rrxPerTrade >= 0 ? "+" : ""}${m.rrxPerTrade.toFixed(2)}R`}
+                icon={Gauge}
+                valueColor={m.rrxPerTrade >= 0 ? "text-green" : "text-red"}
+              />
+              <StatCard
+                label="Profit Factor"
+                value={
+                  m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2)
+                }
+                icon={BarChart3}
+                valueColor={m.profitFactor >= 1 ? "text-green" : "text-red"}
+              />
+              <StatCard
+                label="Total Trades"
+                value={String(m.totalTrades)}
+                icon={Layers}
+              />
+            </StatGroup>
 
-      {/* Error State */}
-      {error && (
-        <Card className="border-red/30 bg-red-bg">
-          <CardContent className="p-4">
-            <p className="text-sm text-red">{error}</p>
-          </CardContent>
-        </Card>
-      )}
+            <StatGroup title="Profit & Loss">
+              <StatCard
+                label="Total P&L"
+                value={`${m.totalPnl >= 0 ? "+$" : "-$"}${Math.abs(m.totalPnl).toFixed(2)}`}
+                icon={m.totalPnl >= 0 ? TrendingUp : TrendingDown}
+                valueColor={m.totalPnl >= 0 ? "text-green" : "text-red"}
+              />
+              <StatCard
+                label="Gross Profit"
+                value={`+$${m.grossProfit.toFixed(2)}`}
+                icon={TrendingUp}
+                valueColor="text-green"
+              />
+              <StatCard
+                label="Gross Loss"
+                value={`-$${m.grossLoss.toFixed(2)}`}
+                icon={TrendingDown}
+                valueColor="text-red"
+              />
+              <StatCard
+                label="Max Drawdown"
+                value={`-$${m.maxDrawdown.toFixed(2)}`}
+                icon={AlertTriangle}
+                valueColor={m.maxDrawdown > 0 ? "text-red" : undefined}
+              />
+            </StatGroup>
 
-      {/* Loading State */}
-      {loading && <LoadingSkeleton />}
-
-      {/* View switch */}
-      {!loading && !error && (
-        <div className="inline-flex rounded-lg border p-1">
-          {(
-            [
-              ["summary", "Performance & Risk"],
-              ["breakdown", "Performance Breakdown"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setView(id)}
-              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
-                view === id
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-muted text-muted-foreground"
-              }`}
+            <StatGroup
+              title="Outcomes"
+              note="win rate counts decided trades only"
             >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+              <StatCard
+                label="Win Rate"
+                value={`${m.winRate.toFixed(1)}%`}
+                icon={Target}
+                valueColor={m.winRate >= 50 ? "text-green" : "text-red"}
+              />
+              <StatCard
+                label="Wins"
+                value={String(m.wins)}
+                icon={Trophy}
+                valueColor="text-green"
+              />
+              <StatCard
+                label="Losses"
+                value={String(m.losses)}
+                icon={TrendingDown}
+                valueColor="text-red"
+              />
+              <StatCard
+                label="Break-even"
+                value={String(m.breakevenTrades)}
+                icon={Minus}
+              />
+            </StatGroup>
 
-      {/* Content */}
-      {!loading && !error && view === "summary" && (
-        <>
-          {/* RRx first — it is the metric the journal is built around. */}
-          <StatGroup title="Risk-Adjusted Return">
-            <StatCard
-              label="Total RRx"
-              value={`${summary.totalRRx >= 0 ? "+" : ""}${summary.totalRRx.toFixed(2)}R`}
-              icon={Target}
-              valueColor={summary.totalRRx >= 0 ? "text-green" : "text-red"}
-            />
-            <StatCard
-              label="RRx per Trade"
-              value={`${summary.rrxPerTrade >= 0 ? "+" : ""}${summary.rrxPerTrade.toFixed(2)}R`}
-              icon={Gauge}
-              valueColor={summary.rrxPerTrade >= 0 ? "text-green" : "text-red"}
-            />
-            <StatCard
-              label="Profit Factor"
-              value={
-                summary.profitFactor === Infinity
-                  ? "∞"
-                  : summary.profitFactor.toFixed(2)
-              }
-              icon={BarChart3}
-              valueColor={summary.profitFactor >= 1 ? "text-green" : "text-red"}
-            />
-            <StatCard
-              label="Total Trades"
-              value={String(summary.totalTrades)}
-              icon={Layers}
-            />
-          </StatGroup>
-
-          <StatGroup title="Profit & Loss">
-            <StatCard
-              label="Total P&L"
-              value={`${summary.totalPnl >= 0 ? "+$" : "-$"}${Math.abs(summary.totalPnl).toFixed(2)}`}
-              icon={summary.totalPnl >= 0 ? TrendingUp : TrendingDown}
-              valueColor={summary.totalPnl >= 0 ? "text-green" : "text-red"}
-            />
-            <StatCard
-              label="Gross Profit"
-              value={`+$${summary.grossProfit.toFixed(2)}`}
-              icon={TrendingUp}
-              valueColor="text-green"
-            />
-            <StatCard
-              label="Gross Loss"
-              value={`-$${summary.grossLoss.toFixed(2)}`}
-              icon={TrendingDown}
-              valueColor="text-red"
-            />
-            <StatCard
-              label="Max Drawdown"
-              value={`-$${risk.maxDrawdown.toFixed(2)}`}
-              icon={AlertTriangle}
-              valueColor={risk.maxDrawdown > 0 ? "text-red" : undefined}
-            />
-          </StatGroup>
-
-          <StatGroup
-            title="Outcomes"
-            note="win rate counts decided trades only"
-          >
-            <StatCard
-              label="Win Rate"
-              value={`${summary.overallWinRate.toFixed(1)}%`}
-              icon={Target}
-              valueColor={summary.overallWinRate >= 50 ? "text-green" : "text-red"}
-            />
-            <StatCard
-              label="Break-even Trades"
-              value={String(risk.breakevenTrades)}
-              icon={Minus}
-            />
-            <StatCard
-              label={`Winning ${periodLabel}`}
-              value={`${summary.totalWinningWeeks} / ${summary.periodsWithData}`}
-              icon={Trophy}
-              valueColor="text-green"
-            />
-            <StatCard
-              label={`Losing ${periodLabel}`}
-              value={`${summary.totalLosingWeeks} / ${summary.periodsWithData}`}
-              icon={AlertTriangle}
-              valueColor="text-red"
-            />
-          </StatGroup>
-
-          <StatGroup
-            title="Risk & Streaks"
-            note="across the trades matching the filters above"
-          >
-            <StatCard
-              label="Avg Risk %"
-              value={`${risk.avgRiskPercent.toFixed(2)}%`}
-              icon={Shield}
-            />
-            <StatCard
-              label="Avg Risk Amount"
-              value={`$${risk.avgRiskAmount.toFixed(2)}`}
-              icon={Shield}
-            />
-            <StatCard
-              label="Max Consecutive Wins"
-              value={String(risk.maxConsecutiveWins)}
-              icon={Trophy}
-              valueColor="text-green"
-            />
-            <StatCard
-              label="Max Consecutive Losses"
-              value={String(risk.maxConsecutiveLosses)}
-              icon={Zap}
-              valueColor="text-red"
-            />
-            <StatCard
-              label="Largest Win"
-              value={`+$${risk.largestWin.toFixed(2)}`}
-              icon={TrendingUp}
-              valueColor="text-green"
-            />
-            <StatCard
-              label="Largest Loss"
-              value={`-$${Math.abs(risk.largestLoss).toFixed(2)}`}
-              icon={TrendingDown}
-              valueColor="text-red"
-            />
-            <StatCard
-              label="Avg Win"
-              value={`+$${risk.avgWin.toFixed(2)}`}
-              icon={TrendingUp}
-              valueColor="text-green"
-            />
-            <StatCard
-              label="Avg Loss"
-              value={`-$${Math.abs(risk.avgLoss).toFixed(2)}`}
-              icon={TrendingDown}
-              valueColor="text-red"
-            />
-          </StatGroup>
-
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <PerformancePnLChart
-              data={data}
-              title={`${periodType === "weekly" ? "Weekly" : "Monthly"} P&L`}
-            />
-            <PerformanceCumulativeChart data={data} title="Cumulative P&L" />
-          </div>
-        </>
-      )}
-
-      {!loading && !error && view === "breakdown" && (
-        <PerformanceTable data={data} periodType={periodType} />
-      )}
+            <StatGroup title="Risk &amp; Streaks">
+              <StatCard
+                label="Avg Risk %"
+                value={`${m.avgRiskPercent.toFixed(2)}%`}
+                icon={Shield}
+              />
+              <StatCard
+                label="Avg Risk Amount"
+                value={`$${m.avgRiskAmount.toFixed(2)}`}
+                icon={Shield}
+              />
+              <StatCard
+                label="Max Consecutive Wins"
+                value={String(m.maxConsecutiveWins)}
+                icon={Trophy}
+                valueColor="text-green"
+              />
+              <StatCard
+                label="Max Consecutive Losses"
+                value={String(m.maxConsecutiveLosses)}
+                icon={Zap}
+                valueColor="text-red"
+              />
+              <StatCard
+                label="Largest Win"
+                value={`+$${m.largestWin.toFixed(2)}`}
+                icon={TrendingUp}
+                valueColor="text-green"
+              />
+              <StatCard
+                label="Largest Loss"
+                value={`-$${Math.abs(m.largestLoss).toFixed(2)}`}
+                icon={TrendingDown}
+                valueColor="text-red"
+              />
+              <StatCard
+                label="Avg Win"
+                value={`+$${m.avgWin.toFixed(2)}`}
+                icon={TrendingUp}
+                valueColor="text-green"
+              />
+              <StatCard
+                label="Avg Loss"
+                value={`-$${Math.abs(m.avgLoss).toFixed(2)}`}
+                icon={TrendingDown}
+                valueColor="text-red"
+              />
+      </StatGroup>
     </div>
   );
 }
