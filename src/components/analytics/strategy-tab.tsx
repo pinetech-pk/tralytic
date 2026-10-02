@@ -14,6 +14,7 @@ import {
 import { PerformanceBar } from "@/components/charts/performance-bar";
 import type { Trade, Strategy } from "@/lib/types/database";
 import { winRate } from "@/lib/utils";
+import { Trophy, Medal, AlertTriangle } from "lucide-react";
 
 interface StrategyTabProps {
   trades: Trade[];
@@ -30,6 +31,7 @@ interface StrategyStats {
   totalPnl: number;
   avgPnl: number;
   totalRRx: number;
+  rrxPerTrade: number;
   grossProfit: number;
   grossLoss: number;
   profitFactor: number;
@@ -38,6 +40,92 @@ interface StrategyStats {
 function formatPnl(value: number): string {
   const prefix = value >= 0 ? "+$" : "-$";
   return `${prefix}${Math.abs(value).toFixed(2)}`;
+}
+
+/** Below this, a difference in expectancy is noise rather than a finding. */
+const THIN_SAMPLE = 20;
+
+function StrategyRankCard({
+  stats,
+  rank,
+  behindBy,
+}: {
+  stats: StrategyStats;
+  rank: number;
+  behindBy: number | null;
+}) {
+  const best = rank === 0;
+  return (
+    <Card className={best ? "border-green/40" : undefined}>
+      <CardContent className="p-5 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              {best ? "Best by RRx per trade" : "Runner-up"}
+            </p>
+            <p className="font-semibold truncate mt-0.5">{stats.name}</p>
+          </div>
+          {best ? (
+            <Trophy className="h-5 w-5 text-green shrink-0" />
+          ) : (
+            <Medal className="h-5 w-5 text-muted-foreground shrink-0" />
+          )}
+        </div>
+
+        <div>
+          <p
+            className={`text-3xl font-bold font-mono ${
+              stats.rrxPerTrade >= 0 ? "text-green" : "text-red"
+            }`}
+          >
+            {stats.rrxPerTrade >= 0 ? "+" : ""}
+            {stats.rrxPerTrade.toFixed(2)}R
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            per trade across {stats.totalTrades}{" "}
+            {stats.totalTrades === 1 ? "trade" : "trades"}
+            {behindBy !== null && behindBy > 0 && (
+              <> · {behindBy.toFixed(2)}R behind</>
+            )}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 text-sm">
+          <div>
+            <p className="text-xs text-muted-foreground">Total RRx</p>
+            <p
+              className={`font-mono font-medium ${
+                stats.totalRRx >= 0 ? "text-green" : "text-red"
+              }`}
+            >
+              {stats.totalRRx >= 0 ? "+" : ""}
+              {stats.totalRRx.toFixed(2)}R
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Win Rate</p>
+            <p className="font-mono font-medium">{stats.winRate.toFixed(1)}%</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Profit Factor</p>
+            <p className="font-mono font-medium">
+              {stats.profitFactor === Infinity
+                ? "∞"
+                : stats.profitFactor.toFixed(2)}
+            </p>
+          </div>
+        </div>
+
+        {stats.totalTrades < THIN_SAMPLE && (
+          <p className="text-xs text-yellow flex items-start gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            Thin sample — {stats.totalTrades} of {THIN_SAMPLE} trades before
+            this means much.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 export function StrategyTab({ trades, strategies }: StrategyTabProps) {
@@ -94,6 +182,10 @@ export function StrategyTab({ trades, strategies }: StrategyTabProps) {
         totalPnl: Math.round(totalPnl * 100) / 100,
         avgPnl: Math.round(avgPnl * 100) / 100,
         totalRRx: Math.round(totalRRx * 100) / 100,
+        rrxPerTrade:
+          strategyTrades.length > 0
+            ? Math.round((totalRRx / strategyTrades.length) * 100) / 100
+            : 0,
         grossProfit: Math.round(grossProfit * 100) / 100,
         grossLoss: Math.round(grossLoss * 100) / 100,
         profitFactor: Math.round(profitFactor * 100) / 100,
@@ -137,10 +229,15 @@ export function StrategyTab({ trades, strategies }: StrategyTabProps) {
     );
   }
 
-  const overallWinRate =
-    totals.totalTrades > 0
-      ? Math.round((totals.wins / totals.totalTrades) * 100 * 10) / 10
-      : 0;
+  // Decided trades only, matching every other win rate in the app.
+  const overallWinRate = Math.round(winRate(totals.wins, totals.losses) * 10) / 10;
+
+  // Ranked on RRx per trade rather than total P&L: expectancy per unit of risk
+  // is what says which system to keep, independent of how often it ran.
+  // "No Strategy" is excluded — it is a bucket, not something to choose.
+  const ranked = [...strategyStats]
+    .filter((s) => s.id !== "__none__")
+    .sort((a, b) => b.rrxPerTrade - a.rrxPerTrade);
   const overallProfitFactor =
     totals.grossLoss > 0
       ? Math.round((totals.grossProfit / totals.grossLoss) * 100) / 100
@@ -150,6 +247,20 @@ export function StrategyTab({ trades, strategies }: StrategyTabProps) {
 
   return (
     <>
+      {/* Ranking */}
+      {ranked.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {ranked.slice(0, 2).map((s, i) => (
+            <StrategyRankCard
+              key={s.id}
+              stats={s}
+              rank={i}
+              behindBy={i === 1 ? ranked[0].rrxPerTrade - s.rrxPerTrade : null}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Win Rate Bars */}
       <Card>
         <CardHeader className="pb-2">

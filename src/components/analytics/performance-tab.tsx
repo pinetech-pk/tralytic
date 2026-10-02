@@ -1,17 +1,6 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { PerformancePnLChart } from "@/components/charts/performance-pnl-chart";
-import { PerformanceCumulativeChart } from "@/components/charts/performance-cumulative-chart";
-import { PerformanceTable } from "@/components/analytics/performance-table";
-import {
-  usePerformanceData,
-  type PeriodType,
-  type NumPeriods,
-  type PerformanceFilters,
-} from "@/hooks/use-performance-data";
 import { useTradeMetrics } from "@/hooks/use-trade-metrics";
 import type { Trade } from "@/lib/types/database";
 import {
@@ -60,18 +49,6 @@ function StatCard({
   );
 }
 
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Skeleton className="h-[380px] rounded-lg" />
-        <Skeleton className="h-[380px] rounded-lg" />
-      </div>
-      <Skeleton className="h-[400px] rounded-lg" />
-    </div>
-  );
-}
-
 /** A labelled band of stat cards, so the numbers read as groups not a wall. */
 function StatGroup({
   title,
@@ -95,112 +72,29 @@ function StatGroup({
   );
 }
 
-export type PerformanceView = "summary" | "breakdown";
-
 interface PerformanceTabProps {
-  accountIds?: string[];
-  includeArchived?: boolean;
-  filters?: PerformanceFilters;
   /** Already scoped by the page-level Period filter. */
   trades: Trade[];
-  view: PerformanceView;
-  onViewChange: (view: PerformanceView) => void;
 }
 
-export function PerformanceTab({
-  accountIds,
-  includeArchived,
-  filters,
-  trades,
-  view,
-  onViewChange,
-}: PerformanceTabProps) {
-  const {
-    data,
-    loading,
-    error,
-    periodType,
-    numPeriods,
-    setPeriodType,
-    setNumPeriods,
-  } = usePerformanceData(accountIds, includeArchived, filters);
-
-  // Summary reads only the filtered trades, so every card describes the same
-  // window: whatever the Period selector at the top of the page says.
+export function PerformanceTab({ trades }: PerformanceTabProps) {
+  // Every card derives from one filtered list, so they cannot disagree
+  // about which window they describe.
   const m = useTradeMetrics(trades);
-  const periodLabel = periodType === "weekly" ? "Weeks" : "Months";
+
+  if (trades.length === 0) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center h-48 text-muted-foreground">
+          No trades match the selected filters
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* View switch, plus whichever controls belong to the active view */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-lg border p-1">
-          {(
-            [
-              ["summary", "Performance & Risk"],
-              ["breakdown", "Performance Breakdown"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => onViewChange(id)}
-              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
-                view === id
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-muted text-muted-foreground"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* The breakdown compares consecutive periods, so it carries its own
-            grouping rather than the page-level date range. */}
-        {view === "breakdown" && (
-          <>
-            <div className="w-[180px]">
-              <Select
-                value={periodType}
-                onChange={(e) => setPeriodType(e.target.value as PeriodType)}
-                options={[
-                  { value: "weekly", label: "Weekly Performance" },
-                  { value: "monthly", label: "Monthly Performance" },
-                ]}
-              />
-            </div>
-            <div className="w-[150px]">
-              <Select
-                value={String(numPeriods)}
-                onChange={(e) =>
-                  setNumPeriods(Number(e.target.value) as NumPeriods)
-                }
-                options={[
-                  { value: "12", label: `Last 12 ${periodLabel}` },
-                  { value: "24", label: `Last 24 ${periodLabel}` },
-                ]}
-              />
-            </div>
-            {!loading && periodType === "weekly" && (
-              <p className="text-xs text-muted-foreground">
-                ISO Week Standard (Mon&ndash;Sun)
-              </p>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Performance & Risk */}
-      {view === "summary" &&
-        (trades.length === 0 ? (
-          <Card>
-            <CardContent className="flex items-center justify-center h-48 text-muted-foreground">
-              No trades match the selected filters
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            {/* RRx first — it is the metric the journal is built around. */}
+      {/* RRx first — it is the metric the journal is built around. */}
             <StatGroup title="Risk-Adjusted Return">
               <StatCard
                 label="Total RRx"
@@ -332,37 +226,7 @@ export function PerformanceTab({
                 icon={TrendingDown}
                 valueColor="text-red"
               />
-            </StatGroup>
-          </>
-        ))}
-
-      {/* Performance Breakdown */}
-      {view === "breakdown" && (
-        <>
-          {error && (
-            <Card className="border-red/30 bg-red-bg">
-              <CardContent className="p-4">
-                <p className="text-sm text-red">{error}</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {loading && <LoadingSkeleton />}
-
-          {!loading && !error && (
-            <>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <PerformancePnLChart
-                  data={data}
-                  title={`${periodType === "weekly" ? "Weekly" : "Monthly"} P&L`}
-                />
-                <PerformanceCumulativeChart data={data} title="Cumulative P&L" />
-              </div>
-              <PerformanceTable data={data} periodType={periodType} />
-            </>
-          )}
-        </>
-      )}
+      </StatGroup>
     </div>
   );
 }
