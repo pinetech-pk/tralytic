@@ -111,7 +111,7 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
             </div>
             {showLabels && (
               <span className="text-lg font-semibold whitespace-nowrap">
-                Tralytics
+                Tralytic
               </span>
             )}
           </Link>

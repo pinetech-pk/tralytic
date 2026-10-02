@@ -31,6 +31,7 @@ interface TradeStats {
   total_trades: number;
   winning_trades: number;
   losing_trades: number;
+  breakeven_trades: number;
   win_rate: number;
   total_pnl: number;
   avg_win: number;
@@ -217,6 +218,10 @@ export default function DashboardPage() {
       const losers = allTrades.filter(t => t.is_winner === false);
       const winningTrades = winners.length;
       const losingTrades = losers.length;
+      // Recorded P&L but no verdict — a break-even, not a trade still pending.
+      const breakevenTrades = allTrades.filter(
+        (t) => t.pnl !== null && t.is_winner === null
+      ).length;
       const overallWinRate = winRate(winningTrades, losingTrades);
       const totalPnl = allTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
       const avgWin = winningTrades > 0 ? winners.reduce((sum, t) => sum + (t.pnl || 0), 0) / winningTrades : 0;
@@ -230,6 +235,7 @@ export default function DashboardPage() {
         total_trades: totalTrades,
         winning_trades: winningTrades,
         losing_trades: losingTrades,
+        breakeven_trades: breakevenTrades,
         win_rate: overallWinRate,
         total_pnl: totalPnl,
         avg_win: avgWin,
@@ -540,6 +546,7 @@ export default function DashboardPage() {
               <WinLossPie
                 wins={stats.winning_trades}
                 losses={stats.losing_trades}
+                breakeven={stats.breakeven_trades}
               />
 
               <Card>

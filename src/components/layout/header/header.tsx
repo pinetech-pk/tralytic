@@ -66,7 +66,7 @@ export function Header({ title, description }: HeaderProps) {
 
         {/* Mobile: Show app name */}
         {isMobile && (
-          <span className="text-lg font-semibold">Tralytics</span>
+          <span className="text-lg font-semibold">Tralytic</span>
         )}
       </div>
 

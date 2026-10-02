@@ -2,7 +2,7 @@
 
 ## Document Overview
 
-**Project:** Tralytics - Trading Analytics Platform
+**Project:** Tralytic - Trading Analytics Platform
 **Version:** 1.0
 **Last Updated:** January 2026
 **Purpose:** Define layout structure, component behavior, and responsiveness strategy
@@ -89,7 +89,7 @@ const config = {
 │         ├────────────────────────────────────────────────────────────────┤
 │         │                         FOOTER                                  │
 │         │  ┌──────────────────────────────────────────────────────────┐  │
-│         │  │  © 2026 Tralytics          Help  ·  Terms  ·  Privacy    │  │
+│         │  │  © 2026 Tralytic          Help  ·  Terms  ·  Privacy    │  │
 │         │  └──────────────────────────────────────────────────────────┘  │
 └─────────┴────────────────────────────────────────────────────────────────┘
 ```
@@ -213,7 +213,7 @@ const config = {
 ┌────────────────────────────────────┐
 │           SIDEBAR HEADER           │  Height: 64px
 │  ┌──────────────────────────────┐  │
-│  │  [Logo Icon]  Tralytics      │  │  - Logo always visible
+│  │  [Logo Icon]  Tralytic      │  │  - Logo always visible
 │  │               ▼ collapse btn │  │  - Text hidden when collapsed
 │  └──────────────────────────────┘  │  - Collapse toggle on desktop
 ├────────────────────────────────────┤
@@ -297,7 +297,7 @@ The sidebar automatically closes when:
 │                                                                          │
 │  MOBILE (< 768px)                                                        │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │  [☰]  Tralytics              [🔔]  [👤]                          │   │
+│  │  [☰]  Tralytic              [🔔]  [👤]                          │   │
 │  │   ▲                            ▲     ▲                            │   │
 │  │   │                            │     │                            │   │
 │  │   Hamburger                  Notif  User                          │   │
@@ -418,14 +418,14 @@ The sidebar automatically closes when:
 │                                                                          │
 │  TABLET (768px - 1023px)                                                 │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │  © 2026 Tralytics                              Help · Terms      │   │
+│  │  © 2026 Tralytic                              Help · Terms      │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 │  Height: 48px | Single row | Minimal content                             │
 │                                                                          │
 │  DESKTOP (≥ 1024px)                                                      │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │                                                                   │   │
-│  │  © 2026 Tralytics · All rights reserved     Help · Docs · Terms  │   │
+│  │  © 2026 Tralytic · All rights reserved     Help · Docs · Terms  │   │
 │  │                                              Privacy · Contact    │   │
 │  │                                                                   │   │
 │  └──────────────────────────────────────────────────────────────────┘   │

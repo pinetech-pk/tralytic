@@ -77,6 +77,11 @@ export function OverviewTab({ trades }: OverviewTabProps) {
   // Win/loss counts
   const wins = trades.filter((t) => t.is_winner === true).length;
   const losses = trades.filter((t) => t.is_winner === false).length;
+  // A recorded P&L with no win/loss verdict is a break-even; a null P&L is
+  // simply a trade with no result yet.
+  const breakeven = trades.filter(
+    (t) => t.pnl !== null && t.is_winner === null
+  ).length;
 
   // Direction stats
   const directionStats = useMemo(() => {
@@ -132,7 +137,7 @@ export function OverviewTab({ trades }: OverviewTabProps) {
       bestTrade: Math.round(bestTrade * 100) / 100,
       worstTrade: Math.round(worstTrade * 100) / 100,
     };
-  }, [trades, wins]);
+  }, [trades, wins, losses]);
 
   if (trades.length === 0) {
     return (
@@ -154,7 +159,7 @@ export function OverviewTab({ trades }: OverviewTabProps) {
 
       {/* Win/Loss, Direction, Key Metrics */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <WinLossPie wins={wins} losses={losses} />
+        <WinLossPie wins={wins} losses={losses} breakeven={breakeven} />
 
         <Card>
           <CardHeader className="pb-2">

@@ -15,7 +15,7 @@ export function Footer() {
     <footer className="border-t bg-card px-6 py-4">
       <div className="flex flex-col items-center justify-between gap-2 text-sm text-muted-foreground lg:flex-row">
         {/* Copyright */}
-        <p>&copy; {new Date().getFullYear()} Tralytics. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} Tralytic. All rights reserved.</p>
 
         {/* Links */}
         <nav className="flex items-center gap-4">

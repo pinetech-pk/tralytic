@@ -1,6 +1,6 @@
 -- =============================================
 -- RBAC SYSTEM MIGRATION
--- Tralytics - Trading Analytics Platform
+-- Tralytic - Trading Analytics Platform
 -- Version: 1.0
 -- =============================================
 

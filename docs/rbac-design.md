@@ -2,7 +2,7 @@
 
 ## Document Overview
 
-**Project:** Tralytics - Trading Analytics Platform
+**Project:** Tralytic - Trading Analytics Platform
 **Version:** 1.0
 **Last Updated:** January 2026
 **Status:** Design Phase
@@ -25,7 +25,7 @@
 
 ## 1. Executive Summary
 
-This document outlines the Role-Based Access Control (RBAC) system for Tralytics, a trading analytics platform. The system is designed to manage two distinct user categories:
+This document outlines the Role-Based Access Control (RBAC) system for Tralytic, a trading analytics platform. The system is designed to manage two distinct user categories:
 
 1. **Administrative Users** - Platform operators with system management capabilities
 2. **Platform Users** - End users who use the platform for trade analytics
