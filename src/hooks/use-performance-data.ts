@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Database, PeriodicPerformanceRow } from "@/lib/types/database";
+import { winRate } from "@/lib/utils";
 
 export type PeriodType = "weekly" | "monthly";
 export type NumPeriods = 12 | 24;
@@ -14,6 +15,10 @@ interface PerformanceSummary {
   overallWinRate: number;
   totalWinningWeeks: number;
   totalLosingWeeks: number;
+  /** Periods that actually contain trades — the denominator for the above. */
+  periodsWithData: number;
+  totalRRx: number;
+  rrxPerTrade: number;
   bestPeriod: { label: string; pnl: number } | null;
   worstPeriod: { label: string; pnl: number } | null;
   avgTradesPerPeriod: number;
@@ -43,6 +48,9 @@ function calculateSummary(data: PeriodicPerformanceRow[]): PerformanceSummary {
       overallWinRate: 0,
       totalWinningWeeks: 0,
       totalLosingWeeks: 0,
+      periodsWithData: 0,
+      totalRRx: 0,
+      rrxPerTrade: 0,
       bestPeriod: null,
       worstPeriod: null,
       avgTradesPerPeriod: 0,
@@ -54,9 +62,15 @@ function calculateSummary(data: PeriodicPerformanceRow[]): PerformanceSummary {
 
   const totalTrades = data.reduce((sum, d) => sum + d.total_trades, 0);
   const totalWins = data.reduce((sum, d) => sum + d.winning_trades, 0);
+  const totalLosses = data.reduce((sum, d) => sum + d.losing_trades, 0);
   const totalPnl = data.reduce((sum, d) => sum + d.total_pnl, 0);
-  const winningPeriods = data.filter((d) => d.total_pnl > 0);
-  const losingPeriods = data.filter((d) => d.total_pnl <= 0);
+  const totalRRx = data.reduce((sum, d) => sum + d.total_risk_reward, 0);
+
+  // A period with no trades is neither winning nor losing; counting empty
+  // weeks as losses made a profitable run look like 10 losing weeks of 12.
+  const tradedPeriods = data.filter((d) => d.total_trades > 0);
+  const winningPeriods = tradedPeriods.filter((d) => d.total_pnl > 0);
+  const losingPeriods = tradedPeriods.filter((d) => d.total_pnl < 0);
 
   const bestPeriod = data.reduce(
     (best, d) => (d.total_pnl > (best?.total_pnl ?? -Infinity) ? d : best),
@@ -79,10 +93,14 @@ function calculateSummary(data: PeriodicPerformanceRow[]): PerformanceSummary {
     totalTrades,
     totalPnl: Math.round(totalPnl * 100) / 100,
     avgPnl: totalTrades > 0 ? Math.round((totalPnl / data.length) * 100) / 100 : 0,
-    overallWinRate:
-      totalTrades > 0 ? Math.round((totalWins / totalTrades) * 100 * 100) / 100 : 0,
+    // Decided trades only, matching every other win rate in the app.
+    overallWinRate: Math.round(winRate(totalWins, totalLosses) * 100) / 100,
     totalWinningWeeks: winningPeriods.length,
     totalLosingWeeks: losingPeriods.length,
+    periodsWithData: tradedPeriods.length,
+    totalRRx: Math.round(totalRRx * 100) / 100,
+    rrxPerTrade:
+      totalTrades > 0 ? Math.round((totalRRx / totalTrades) * 100) / 100 : 0,
     bestPeriod: bestPeriod
       ? { label: bestPeriod.period_label, pnl: bestPeriod.total_pnl }
       : null,

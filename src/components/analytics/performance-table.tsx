@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { winRate } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -33,6 +35,7 @@ function formatDate(dateStr: string): string {
 
 export function PerformanceTable({ data, periodType }: PerformanceTableProps) {
   const periodLabel = periodType === "weekly" ? "Week" : "Month";
+  const [hideEmpty, setHideEmpty] = useState(true);
 
   // Calculate totals for footer
   const totals = data.reduce(
@@ -67,17 +70,35 @@ export function PerformanceTable({ data, periodType }: PerformanceTableProps) {
         ? Infinity
         : 0;
 
+  // Decided trades only, matching every other win rate in the app.
   const overallWinRate =
-    totals.totalTrades > 0
-      ? Math.round((totals.winningTrades / totals.totalTrades) * 100 * 100) / 100
-      : 0;
+    Math.round(winRate(totals.winningTrades, totals.losingTrades) * 100) / 100;
+
+  // Index is kept from the full set so period numbering stays stable when
+  // empty ones are hidden.
+  const indexedRows = data.map((row, index) => ({ row, index }));
+  const emptyCount = indexedRows.filter((r) => r.row.total_trades === 0).length;
+  const visibleRows = hideEmpty
+    ? indexedRows.filter((r) => r.row.total_trades > 0)
+    : indexedRows;
 
   return (
     <Card>
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base font-medium">
           {periodType === "weekly" ? "Weekly" : "Monthly"} Performance Breakdown
         </CardTitle>
+        {emptyCount > 0 && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 rounded border-border"
+              checked={hideEmpty}
+              onChange={(e) => setHideEmpty(e.target.checked)}
+            />
+            Hide {emptyCount} empty {emptyCount === 1 ? periodLabel.toLowerCase() : `${periodLabel.toLowerCase()}s`}
+          </label>
+        )}
       </CardHeader>
       <CardContent className="px-2 pb-2">
         {data.length === 0 ? (
@@ -108,7 +129,27 @@ export function PerformanceTable({ data, periodType }: PerformanceTableProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.map((row, index) => (
+                {visibleRows.map(({ row, index }) =>
+                  row.total_trades === 0 ? (
+                    // A period with no trades has nothing to colour; a row of
+                    // green and red zeros reads as data that is not there.
+                    <TableRow key={row.period_key} className="opacity-60">
+                      <TableCell className="font-medium whitespace-nowrap text-muted-foreground">
+                        {periodType === "weekly"
+                          ? `${periodLabel} ${index + 1}`
+                          : row.period_label}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground whitespace-nowrap text-xs">
+                        {formatDate(row.period_start)} - {formatDate(row.period_end)}
+                      </TableCell>
+                      <TableCell
+                        colSpan={14}
+                        className="text-muted-foreground text-xs"
+                      >
+                        No trades
+                      </TableCell>
+                    </TableRow>
+                  ) : (
                   <TableRow key={row.period_key}>
                     <TableCell className="font-medium whitespace-nowrap">
                       {periodType === "weekly"
@@ -194,7 +235,8 @@ export function PerformanceTable({ data, periodType }: PerformanceTableProps) {
                       </span>
                     </TableCell>
                   </TableRow>
-                ))}
+                  )
+                )}
               </TableBody>
               <TableFooter>
                 <TableRow className="bg-muted/30 font-semibold">

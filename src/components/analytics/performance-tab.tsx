@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,6 +13,8 @@ import {
   type NumPeriods,
   type PerformanceFilters,
 } from "@/hooks/use-performance-data";
+import { useRiskMetrics } from "@/hooks/use-risk-metrics";
+import type { Trade } from "@/lib/types/database";
 import {
   TrendingUp,
   TrendingDown,
@@ -19,6 +22,11 @@ import {
   Target,
   Trophy,
   AlertTriangle,
+  Gauge,
+  Layers,
+  Shield,
+  Zap,
+  Minus,
 } from "lucide-react";
 
 function StatCard({
@@ -70,13 +78,45 @@ function LoadingSkeleton() {
   );
 }
 
+/** A labelled band of stat cards, so the numbers read as groups not a wall. */
+function StatGroup({
+  title,
+  note,
+  children,
+}: {
+  title: string;
+  note?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </h3>
+        {note && <span className="text-xs text-muted-foreground/70">{note}</span>}
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{children}</div>
+    </div>
+  );
+}
+
 interface PerformanceTabProps {
   accountIds?: string[];
   includeArchived?: boolean;
   filters?: PerformanceFilters;
+  /** Per-trade data for the risk metrics the period RPC cannot provide. */
+  trades: Trade[];
 }
 
-export function PerformanceTab({ accountIds, includeArchived, filters }: PerformanceTabProps) {
+type PerformanceView = "summary" | "breakdown";
+
+export function PerformanceTab({
+  accountIds,
+  includeArchived,
+  filters,
+  trades,
+}: PerformanceTabProps) {
   const {
     data,
     summary,
@@ -88,7 +128,9 @@ export function PerformanceTab({ accountIds, includeArchived, filters }: Perform
     setNumPeriods,
   } = usePerformanceData(accountIds, includeArchived, filters);
 
+  const [view, setView] = useState<PerformanceView>("summary");
   const periodLabel = periodType === "weekly" ? "Weeks" : "Months";
+  const risk = useRiskMetrics(trades);
 
   return (
     <div className="space-y-6">
@@ -136,41 +178,70 @@ export function PerformanceTab({ accountIds, includeArchived, filters }: Perform
       {/* Loading State */}
       {loading && <LoadingSkeleton />}
 
-      {/* Content */}
+      {/* View switch */}
       {!loading && !error && (
+        <div className="inline-flex rounded-lg border p-1">
+          {(
+            [
+              ["summary", "Performance & Risk"],
+              ["breakdown", "Performance Breakdown"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setView(id)}
+              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                view === id
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-muted text-muted-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Content */}
+      {!loading && !error && view === "summary" && (
         <>
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+          {/* RRx first — it is the metric the journal is built around. */}
+          <StatGroup title="Risk-Adjusted Return">
+            <StatCard
+              label="Total RRx"
+              value={`${summary.totalRRx >= 0 ? "+" : ""}${summary.totalRRx.toFixed(2)}R`}
+              icon={Target}
+              valueColor={summary.totalRRx >= 0 ? "text-green" : "text-red"}
+            />
+            <StatCard
+              label="RRx per Trade"
+              value={`${summary.rrxPerTrade >= 0 ? "+" : ""}${summary.rrxPerTrade.toFixed(2)}R`}
+              icon={Gauge}
+              valueColor={summary.rrxPerTrade >= 0 ? "text-green" : "text-red"}
+            />
+            <StatCard
+              label="Profit Factor"
+              value={
+                summary.profitFactor === Infinity
+                  ? "∞"
+                  : summary.profitFactor.toFixed(2)
+              }
+              icon={BarChart3}
+              valueColor={summary.profitFactor >= 1 ? "text-green" : "text-red"}
+            />
             <StatCard
               label="Total Trades"
               value={String(summary.totalTrades)}
-              icon={BarChart3}
+              icon={Layers}
             />
+          </StatGroup>
+
+          <StatGroup title="Profit & Loss">
             <StatCard
               label="Total P&L"
               value={`${summary.totalPnl >= 0 ? "+$" : "-$"}${Math.abs(summary.totalPnl).toFixed(2)}`}
               icon={summary.totalPnl >= 0 ? TrendingUp : TrendingDown}
               valueColor={summary.totalPnl >= 0 ? "text-green" : "text-red"}
-            />
-            <StatCard
-              label="Win Rate"
-              value={`${summary.overallWinRate.toFixed(1)}%`}
-              icon={Target}
-              valueColor={
-                summary.overallWinRate >= 50 ? "text-green" : "text-red"
-              }
-            />
-            <StatCard
-              label={`Winning ${periodLabel}`}
-              value={`${summary.totalWinningWeeks} / ${data.length}`}
-              icon={Trophy}
-              valueColor="text-green"
-            />
-            <StatCard
-              label={`Losing ${periodLabel}`}
-              value={`${summary.totalLosingWeeks} / ${data.length}`}
-              icon={AlertTriangle}
-              valueColor="text-red"
             />
             <StatCard
               label="Gross Profit"
@@ -185,18 +256,93 @@ export function PerformanceTab({ accountIds, includeArchived, filters }: Perform
               valueColor="text-red"
             />
             <StatCard
-              label="Profit Factor"
-              value={
-                summary.profitFactor === Infinity
-                  ? "∞"
-                  : summary.profitFactor.toFixed(2)
-              }
-              icon={BarChart3}
-              valueColor={
-                summary.profitFactor >= 1 ? "text-green" : "text-red"
-              }
+              label="Max Drawdown"
+              value={`-$${risk.maxDrawdown.toFixed(2)}`}
+              icon={AlertTriangle}
+              valueColor={risk.maxDrawdown > 0 ? "text-red" : undefined}
             />
-          </div>
+          </StatGroup>
+
+          <StatGroup
+            title="Outcomes"
+            note="win rate counts decided trades only"
+          >
+            <StatCard
+              label="Win Rate"
+              value={`${summary.overallWinRate.toFixed(1)}%`}
+              icon={Target}
+              valueColor={summary.overallWinRate >= 50 ? "text-green" : "text-red"}
+            />
+            <StatCard
+              label="Break-even Trades"
+              value={String(risk.breakevenTrades)}
+              icon={Minus}
+            />
+            <StatCard
+              label={`Winning ${periodLabel}`}
+              value={`${summary.totalWinningWeeks} / ${summary.periodsWithData}`}
+              icon={Trophy}
+              valueColor="text-green"
+            />
+            <StatCard
+              label={`Losing ${periodLabel}`}
+              value={`${summary.totalLosingWeeks} / ${summary.periodsWithData}`}
+              icon={AlertTriangle}
+              valueColor="text-red"
+            />
+          </StatGroup>
+
+          <StatGroup
+            title="Risk & Streaks"
+            note="across the trades matching the filters above"
+          >
+            <StatCard
+              label="Avg Risk %"
+              value={`${risk.avgRiskPercent.toFixed(2)}%`}
+              icon={Shield}
+            />
+            <StatCard
+              label="Avg Risk Amount"
+              value={`$${risk.avgRiskAmount.toFixed(2)}`}
+              icon={Shield}
+            />
+            <StatCard
+              label="Max Consecutive Wins"
+              value={String(risk.maxConsecutiveWins)}
+              icon={Trophy}
+              valueColor="text-green"
+            />
+            <StatCard
+              label="Max Consecutive Losses"
+              value={String(risk.maxConsecutiveLosses)}
+              icon={Zap}
+              valueColor="text-red"
+            />
+            <StatCard
+              label="Largest Win"
+              value={`+$${risk.largestWin.toFixed(2)}`}
+              icon={TrendingUp}
+              valueColor="text-green"
+            />
+            <StatCard
+              label="Largest Loss"
+              value={`-$${Math.abs(risk.largestLoss).toFixed(2)}`}
+              icon={TrendingDown}
+              valueColor="text-red"
+            />
+            <StatCard
+              label="Avg Win"
+              value={`+$${risk.avgWin.toFixed(2)}`}
+              icon={TrendingUp}
+              valueColor="text-green"
+            />
+            <StatCard
+              label="Avg Loss"
+              value={`-$${Math.abs(risk.avgLoss).toFixed(2)}`}
+              icon={TrendingDown}
+              valueColor="text-red"
+            />
+          </StatGroup>
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -204,15 +350,13 @@ export function PerformanceTab({ accountIds, includeArchived, filters }: Perform
               data={data}
               title={`${periodType === "weekly" ? "Weekly" : "Monthly"} P&L`}
             />
-            <PerformanceCumulativeChart
-              data={data}
-              title="Cumulative P&L"
-            />
+            <PerformanceCumulativeChart data={data} title="Cumulative P&L" />
           </div>
-
-          {/* Table */}
-          <PerformanceTable data={data} periodType={periodType} />
         </>
+      )}
+
+      {!loading && !error && view === "breakdown" && (
+        <PerformanceTable data={data} periodType={periodType} />
       )}
     </div>
   );

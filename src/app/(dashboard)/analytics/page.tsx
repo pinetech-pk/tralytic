@@ -12,7 +12,6 @@ import { OverviewTab } from "@/components/analytics/overview-tab";
 import { PerformanceTab } from "@/components/analytics/performance-tab";
 import { StrategyTab } from "@/components/analytics/strategy-tab";
 import { SessionTab } from "@/components/analytics/session-tab";
-import { RiskTab } from "@/components/analytics/risk-tab";
 
 const ACCOUNT_TYPE_OPTIONS = [
   { value: "", label: "All" },
@@ -301,7 +300,6 @@ export default function AnalyticsPage() {
             <TabsTrigger value="performance">Performance</TabsTrigger>
             <TabsTrigger value="strategy">By Strategy</TabsTrigger>
             <TabsTrigger value="session">By Session</TabsTrigger>
-            <TabsTrigger value="risk">Risk Analysis</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6 mt-6">
@@ -317,6 +315,7 @@ export default function AnalyticsPage() {
               accountIds={filteredAccountIds}
               includeArchived={includeArchived}
               filters={performanceFilters}
+              trades={visibleTrades}
             />
           </TabsContent>
 
@@ -336,9 +335,6 @@ export default function AnalyticsPage() {
             )}
           </TabsContent>
 
-          <TabsContent value="risk" className="space-y-6 mt-6">
-            {loading ? <LoadingSkeleton /> : <RiskTab trades={visibleTrades} />}
-          </TabsContent>
         </Tabs>
       </div>
     </div>
