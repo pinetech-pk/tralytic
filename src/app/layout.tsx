@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Trading Journal Pro",
-  description: "Track, analyze, and improve your trading performance",
+  title: "Tralytic",
+  description:
+    "Behavioural trading analytics — track RRx, sessions and execution patterns, not just P&L",
 };
 
 export default function RootLayout({
