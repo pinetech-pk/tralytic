@@ -10,6 +10,7 @@ import {
   usePerformanceData,
   type PeriodType,
   type NumPeriods,
+  type PerformanceFilters,
 } from "@/hooks/use-performance-data";
 import {
   TrendingUp,
@@ -72,9 +73,10 @@ function LoadingSkeleton() {
 interface PerformanceTabProps {
   accountIds?: string[];
   includeArchived?: boolean;
+  filters?: PerformanceFilters;
 }
 
-export function PerformanceTab({ accountIds, includeArchived }: PerformanceTabProps) {
+export function PerformanceTab({ accountIds, includeArchived, filters }: PerformanceTabProps) {
   const {
     data,
     summary,
@@ -84,7 +86,7 @@ export function PerformanceTab({ accountIds, includeArchived }: PerformanceTabPr
     numPeriods,
     setPeriodType,
     setNumPeriods,
-  } = usePerformanceData(accountIds, includeArchived);
+  } = usePerformanceData(accountIds, includeArchived, filters);
 
   const periodLabel = periodType === "weekly" ? "Weeks" : "Months";
 

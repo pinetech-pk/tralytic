@@ -125,6 +125,20 @@ export default function AnalyticsPage() {
     });
   }, [trades, selectedStrategy, excludeWeekends]);
 
+  // The Performance tab reads from the RPC, so its filters are pushed down
+  // rather than applied to an already-fetched array.
+  const performanceFilters = useMemo(
+    () => ({
+      strategyId:
+        selectedStrategy && selectedStrategy !== NO_STRATEGY
+          ? selectedStrategy
+          : undefined,
+      noStrategy: selectedStrategy === NO_STRATEGY,
+      excludeWeekends,
+    }),
+    [selectedStrategy, excludeWeekends]
+  );
+
   const weekendCount = useMemo(
     () => trades.filter((t) => isWeekendUtc(t.entry_date)).length,
     [trades]
@@ -302,6 +316,7 @@ export default function AnalyticsPage() {
             <PerformanceTab
               accountIds={filteredAccountIds}
               includeArchived={includeArchived}
+              filters={performanceFilters}
             />
           </TabsContent>
 

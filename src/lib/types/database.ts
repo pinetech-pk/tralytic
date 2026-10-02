@@ -960,6 +960,9 @@ export interface Database {
           p_num_periods?: number;
           p_account_ids?: string[];
           p_include_archived?: boolean;
+          p_strategy_id?: string;
+          p_no_strategy?: boolean;
+          p_exclude_weekends?: boolean;
         };
         Returns: {
           period_key: string;
