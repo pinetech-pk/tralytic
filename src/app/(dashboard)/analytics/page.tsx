@@ -3,8 +3,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Header } from "@/components/layout/header";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
+import { getDateRange, isWeekendUtc } from "@/lib/utils";
 import type { Account, Trade, Strategy } from "@/lib/types/database";
 import { OverviewTab } from "@/components/analytics/overview-tab";
 import { PerformanceTab } from "@/components/analytics/performance-tab";
@@ -18,6 +20,19 @@ const ACCOUNT_TYPE_OPTIONS = [
   { value: "funded", label: "Funded" },
   { value: "demo", label: "Demo" },
   { value: "backtest", label: "Backtest" },
+];
+
+/** Sentinel for trades with no strategy, which "" already means "all". */
+const NO_STRATEGY = "__none__";
+
+// Longer horizons than the dashboard's — backtest analysis spans weeks.
+const TIME_RANGE_OPTIONS = [
+  { value: "", label: "All Time" },
+  { value: "7days", label: "Last 7 Days" },
+  { value: "15days", label: "Last 15 Days" },
+  { value: "30days", label: "Last 30 Days" },
+  { value: "90days", label: "Last 3 Months" },
+  { value: "180days", label: "Last 6 Months" },
 ];
 
 function LoadingSkeleton() {
@@ -42,6 +57,9 @@ export default function AnalyticsPage() {
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [selectedAccountType, setSelectedAccountType] = useState("personal");
+  const [selectedTimeRange, setSelectedTimeRange] = useState("");
+  const [selectedStrategy, setSelectedStrategy] = useState("");
+  const [excludeWeekends, setExcludeWeekends] = useState(false);
   const [includeArchived, setIncludeArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
@@ -68,6 +86,63 @@ export default function AnalyticsPage() {
     }
     fetchBase();
   }, [supabase]);
+
+  /**
+   * Only strategies that actually appear in the fetched scope — listing every
+   * strategy in the journal would offer filters that return nothing.
+   */
+  const availableStrategies = useMemo(() => {
+    const ids = new Set(trades.map((t) => t.strategy_id).filter(Boolean));
+    const options = strategies
+      .filter((s) => ids.has(s.id))
+      .map((s) => ({ value: s.id, label: s.name }));
+
+    if (trades.some((t) => t.strategy_id === null)) {
+      options.push({ value: NO_STRATEGY, label: "— No Strategy —" });
+    }
+    return options;
+  }, [trades, strategies]);
+
+  // A strategy picked under one account type may not exist under the next.
+  useEffect(() => {
+    if (
+      selectedStrategy &&
+      !availableStrategies.some((o) => o.value === selectedStrategy)
+    ) {
+      setSelectedStrategy("");
+    }
+  }, [availableStrategies, selectedStrategy]);
+
+  const visibleTrades = useMemo(() => {
+    return trades.filter((t) => {
+      if (selectedStrategy === NO_STRATEGY) {
+        if (t.strategy_id !== null) return false;
+      } else if (selectedStrategy && t.strategy_id !== selectedStrategy) {
+        return false;
+      }
+      if (excludeWeekends && isWeekendUtc(t.entry_date)) return false;
+      return true;
+    });
+  }, [trades, selectedStrategy, excludeWeekends]);
+
+  // The Performance tab reads from the RPC, so its filters are pushed down
+  // rather than applied to an already-fetched array.
+  const performanceFilters = useMemo(
+    () => ({
+      strategyId:
+        selectedStrategy && selectedStrategy !== NO_STRATEGY
+          ? selectedStrategy
+          : undefined,
+      noStrategy: selectedStrategy === NO_STRATEGY,
+      excludeWeekends,
+    }),
+    [selectedStrategy, excludeWeekends]
+  );
+
+  const weekendCount = useMemo(
+    () => trades.filter((t) => isWeekendUtc(t.entry_date)).length,
+    [trades]
+  );
 
   // Filtered account IDs for the Performance tab RPC
   const filteredAccountIds = useMemo(() => {
@@ -100,6 +175,10 @@ export default function AnalyticsPage() {
         query = query.eq("account_is_archived", false);
       }
 
+      const { startDate, endDate } = getDateRange(selectedTimeRange);
+      if (startDate) query = query.gte("entry_date", startDate);
+      if (endDate) query = query.lte("entry_date", endDate);
+
       if (selectedAccountType) {
         const typeIds = accounts
           .filter((a) => a.account_type === selectedAccountType)
@@ -125,7 +204,7 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, selectedAccountType, accounts, includeArchived]);
+  }, [supabase, selectedAccountType, accounts, includeArchived, selectedTimeRange]);
 
   // Fetch trades after accounts are loaded
   useEffect(() => {
@@ -171,6 +250,50 @@ export default function AnalyticsPage() {
           </label>
         </div>
 
+        {/* Period, strategy and weekend filters */}
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="w-48 space-y-1">
+            <span className="text-xs text-muted-foreground">Period</span>
+            <Select
+              options={TIME_RANGE_OPTIONS}
+              value={selectedTimeRange}
+              onChange={(e) => setSelectedTimeRange(e.target.value)}
+            />
+          </div>
+
+          <div className="w-64 space-y-1">
+            <span className="text-xs text-muted-foreground">Strategy</span>
+            <Select
+              options={[
+                { value: "", label: "All Strategies" },
+                ...availableStrategies,
+              ]}
+              value={selectedStrategy}
+              onChange={(e) => setSelectedStrategy(e.target.value)}
+              disabled={availableStrategies.length === 0}
+            />
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer pb-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-border"
+              checked={excludeWeekends}
+              onChange={(e) => setExcludeWeekends(e.target.checked)}
+            />
+            Exclude weekends (UTC)
+            {weekendCount > 0 && (
+              <span className="text-xs">({weekendCount} trades)</span>
+            )}
+          </label>
+
+          {visibleTrades.length !== trades.length && (
+            <span className="text-xs text-muted-foreground pb-2">
+              Showing {visibleTrades.length} of {trades.length} trades
+            </span>
+          )}
+        </div>
+
         {/* Analytics Tabs */}
         <Tabs defaultValue="overview">
           <TabsList>
@@ -185,7 +308,7 @@ export default function AnalyticsPage() {
             {loading ? (
               <LoadingSkeleton />
             ) : (
-              <OverviewTab trades={trades} />
+              <OverviewTab trades={visibleTrades} />
             )}
           </TabsContent>
 
@@ -193,6 +316,7 @@ export default function AnalyticsPage() {
             <PerformanceTab
               accountIds={filteredAccountIds}
               includeArchived={includeArchived}
+              filters={performanceFilters}
             />
           </TabsContent>
 
@@ -200,7 +324,7 @@ export default function AnalyticsPage() {
             {loading ? (
               <LoadingSkeleton />
             ) : (
-              <StrategyTab trades={trades} strategies={strategies} />
+              <StrategyTab trades={visibleTrades} strategies={strategies} />
             )}
           </TabsContent>
 
@@ -208,12 +332,12 @@ export default function AnalyticsPage() {
             {loading ? (
               <LoadingSkeleton />
             ) : (
-              <SessionTab trades={trades} />
+              <SessionTab trades={visibleTrades} />
             )}
           </TabsContent>
 
           <TabsContent value="risk" className="space-y-6 mt-6">
-            {loading ? <LoadingSkeleton /> : <RiskTab trades={trades} />}
+            {loading ? <LoadingSkeleton /> : <RiskTab trades={visibleTrades} />}
           </TabsContent>
         </Tabs>
       </div>

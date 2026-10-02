@@ -22,7 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createClient } from "@/lib/supabase/client";
 import type { Account, Strategy, Trade } from "@/lib/types/database";
-import { winRate } from "@/lib/utils";
+import { winRate, getDateRange } from "@/lib/utils";
 
 // "" means "no filter"; the other values match the trades.session column domain.
 type SessionFilter = NonNullable<Trade["session"]> | "";
@@ -109,59 +109,6 @@ const SESSION_COLORS: Record<string, string> = {
 };
 
 // Helper function to format date as YYYY-MM-DD in local timezone
-function formatLocalDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-// Helper function to calculate date range
-function getDateRange(timeRange: string): { startDate?: string; endDate?: string } {
-  if (!timeRange) return {};
-
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  let startDate: Date;
-  let endDate: Date;
-
-  switch (timeRange) {
-    case "today":
-      startDate = today;
-      endDate = today;
-      break;
-    case "yesterday":
-      startDate = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-      endDate = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-      break;
-    case "3days":
-      startDate = new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000);
-      endDate = today;
-      break;
-    case "7days":
-      startDate = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
-      endDate = today;
-      break;
-    case "30days":
-      startDate = new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000);
-      endDate = today;
-      break;
-    case "60days":
-      startDate = new Date(today.getTime() - 59 * 24 * 60 * 60 * 1000);
-      endDate = today;
-      break;
-    default:
-      return {};
-  }
-
-  // Format with time boundaries to include the full day
-  // startDate at 00:00:00, endDate at 23:59:59
-  return {
-    startDate: `${formatLocalDate(startDate)}T00:00:00`,
-    endDate: `${formatLocalDate(endDate)}T23:59:59`,
-  };
-}
-
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [accounts, setAccounts] = useState<Account[]>([]);

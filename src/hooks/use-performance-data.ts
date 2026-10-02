@@ -102,10 +102,20 @@ function calculateSummary(data: PeriodicPerformanceRow[]): PerformanceSummary {
   };
 }
 
+export interface PerformanceFilters {
+  /** Exactly one strategy; ignored when noStrategy is set. */
+  strategyId?: string;
+  /** Restrict to trades with no strategy assigned. */
+  noStrategy?: boolean;
+  excludeWeekends?: boolean;
+}
+
 export function usePerformanceData(
   accountIds?: string[],
-  includeArchived = false
+  includeArchived = false,
+  filters: PerformanceFilters = {}
 ): UsePerformanceDataReturn {
+  const { strategyId, noStrategy = false, excludeWeekends = false } = filters;
   const [periodType, setPeriodType] = useState<PeriodType>("weekly");
   const [numPeriods, setNumPeriods] = useState<NumPeriods>(12);
   const [data, setData] = useState<PeriodicPerformanceRow[]>([]);
@@ -135,9 +145,14 @@ export function usePerformanceData(
           p_period_type: periodType,
           p_num_periods: numPeriods,
           p_include_archived: includeArchived,
+          p_no_strategy: noStrategy,
+          p_exclude_weekends: excludeWeekends,
         };
       if (accountIds && accountIds.length > 0) {
         rpcParams.p_account_ids = accountIds;
+      }
+      if (strategyId && !noStrategy) {
+        rpcParams.p_strategy_id = strategyId;
       }
 
       const { data: result, error: rpcError } = await supabase.rpc(
@@ -160,7 +175,15 @@ export function usePerformanceData(
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodType, numPeriods, includeArchived, JSON.stringify(accountIds)]);
+  }, [
+    periodType,
+    numPeriods,
+    includeArchived,
+    strategyId,
+    noStrategy,
+    excludeWeekends,
+    JSON.stringify(accountIds),
+  ]);
 
   useEffect(() => {
     fetchData();
