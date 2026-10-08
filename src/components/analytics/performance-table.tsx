@@ -20,6 +20,13 @@ interface PerformanceTableProps {
   periodType: PeriodType;
 }
 
+/**
+ * RRx is the headline metric, so its column gets a tinted band rather than
+ * just bold text: in a sixteen-column table that scrolls sideways, the
+ * problem is finding the column, and green/red already carry sign meaning.
+ */
+const RRX_CELL = "bg-blue/10";
+
 function formatPnl(value: number): string {
   const prefix = value >= 0 ? "+$" : "-$";
   return `${prefix}${Math.abs(value).toFixed(2)}`;
@@ -117,12 +124,14 @@ export function PerformanceTable({ data, periodType }: PerformanceTableProps) {
                   <TableHead className="text-right whitespace-nowrap">Losses</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Win Rate</TableHead>
                   <TableHead className="text-right whitespace-nowrap">P&L</TableHead>
+                  <TableHead className={`text-right whitespace-nowrap ${RRX_CELL}`}>
+                    Total RRx
+                  </TableHead>
                   <TableHead className="text-right whitespace-nowrap">Avg P&L</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Best Trade</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Worst Trade</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Long</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Short</TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Total RRx</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Gross Profit</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Gross Loss</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Profit Factor</TableHead>
@@ -186,6 +195,18 @@ export function PerformanceTable({ data, periodType }: PerformanceTableProps) {
                         {formatPnl(row.total_pnl)}
                       </span>
                     </TableCell>
+                    <TableCell
+                      className={`text-right font-mono font-bold ${RRX_CELL}`}
+                    >
+                      <span
+                        className={
+                          row.total_risk_reward >= 0 ? "text-green" : "text-red"
+                        }
+                      >
+                        {row.total_risk_reward >= 0 ? "+" : ""}
+                        {row.total_risk_reward.toFixed(2)}R
+                      </span>
+                    </TableCell>
                     <TableCell className="text-right font-mono">
                       <span
                         className={
@@ -206,16 +227,6 @@ export function PerformanceTable({ data, periodType }: PerformanceTableProps) {
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       {row.short_trades}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      <span
-                        className={
-                          row.total_risk_reward >= 0 ? "text-green" : "text-red"
-                        }
-                      >
-                        {row.total_risk_reward >= 0 ? "+" : ""}
-                        {row.total_risk_reward.toFixed(2)}R
-                      </span>
                     </TableCell>
                     <TableCell className="text-right font-mono text-green">
                       +${row.gross_profit.toFixed(2)}
@@ -271,16 +282,9 @@ export function PerformanceTable({ data, periodType }: PerformanceTableProps) {
                       {formatPnl(totals.totalPnl)}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right font-mono">—</TableCell>
-                  <TableCell className="text-right font-mono">—</TableCell>
-                  <TableCell className="text-right font-mono">—</TableCell>
-                  <TableCell className="text-right font-mono">
-                    {totals.longTrades}
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    {totals.shortTrades}
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
+                  <TableCell
+                    className={`text-right font-mono font-bold ${RRX_CELL}`}
+                  >
                     <span
                       className={
                         totals.totalRiskReward >= 0 ? "text-green" : "text-red"
@@ -289,6 +293,15 @@ export function PerformanceTable({ data, periodType }: PerformanceTableProps) {
                       {totals.totalRiskReward >= 0 ? "+" : ""}
                       {totals.totalRiskReward.toFixed(2)}R
                     </span>
+                  </TableCell>
+                  <TableCell className="text-right font-mono">—</TableCell>
+                  <TableCell className="text-right font-mono">—</TableCell>
+                  <TableCell className="text-right font-mono">—</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {totals.longTrades}
+                  </TableCell>
+                  <TableCell className="text-right font-mono">
+                    {totals.shortTrades}
                   </TableCell>
                   <TableCell className="text-right font-mono text-green">
                     +${totals.grossProfit.toFixed(2)}
