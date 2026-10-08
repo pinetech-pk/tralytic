@@ -24,11 +24,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
-import { SessionBadge } from "@/components/shared/session-badge";
-import { DirectionBadge } from "@/components/shared/direction-badge";
-import { ResultBadge } from "@/components/shared/result-badge";
+import { ColumnPicker } from "@/components/trades/column-picker";
+import {
+  TRADE_COLUMNS,
+  DEFAULT_COLUMNS,
+  COLUMN_STORAGE_KEY,
+  sanitizeColumns,
+  writeColumnCache,
+} from "@/components/trades/trade-columns";
 import { EmptyState } from "@/components/shared/empty-state";
-import { formatDate, formatCurrency, tradeResult } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import type { Trade, Account, Strategy } from "@/lib/types/database";
 
@@ -92,6 +97,77 @@ export default function TradesPage() {
   const [selectedResult, setSelectedResult] = useState("");
 
   const supabase = createClient();
+
+  // Stored on the profile so the layout follows the user between devices;
+  // localStorage only mirrors it to avoid a flash of defaults on load.
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COLUMNS);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+
+  useEffect(() => {
+    // Paint from the local mirror first so the table does not flash the
+    // default layout on every load, then let the profile correct it.
+    let fromCache: string[] | null = null;
+    try {
+      const stored = localStorage.getItem(COLUMN_STORAGE_KEY);
+      if (stored) fromCache = sanitizeColumns(JSON.parse(stored));
+    } catch {
+      // Private window or blocked storage — the profile still arrives.
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (fromCache && fromCache.length > 0) setVisibleColumns(fromCache);
+
+    let cancelled = false;
+    async function loadProfilePreference() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("trade_columns")
+        .eq("id", user.id)
+        .single();
+      if (cancelled) return;
+
+      // NULL means never chosen; an empty array would mean no columns at all.
+      if (data?.trade_columns == null) return;
+      const valid = sanitizeColumns(data.trade_columns);
+      if (valid.length === 0) return;
+
+      setVisibleColumns(valid);
+      writeColumnCache(valid);
+    }
+
+    loadProfilePreference();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
+
+  const applyColumns = async (next: string[]) => {
+    setVisibleColumns(next);
+    writeColumnCache(next);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ trade_columns: next })
+      .eq("id", user.id);
+    if (error) {
+      // The mirror still holds it for this browser; only syncing is lost.
+      console.error("Error saving column preference:", error);
+    }
+  };
+
+  const activeColumns = TRADE_COLUMNS.filter((c) =>
+    visibleColumns.includes(c.id)
+  );
+
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
@@ -326,6 +402,18 @@ export default function TradesPage() {
                 onChange={(e) => { setSelectedResult(e.target.value); setCurrentPage(1); }}
               />
             </div>
+            <div className="ml-auto">
+              <ColumnPicker
+                visible={visibleColumns}
+                onChange={applyColumns}
+                onReset={() => {
+                  applyColumns(DEFAULT_COLUMNS);
+                  setColumnsOpen(false);
+                }}
+                open={columnsOpen}
+                onOpenChange={setColumnsOpen}
+              />
+            </div>
           </div>
         </div>
 
@@ -475,16 +563,14 @@ export default function TradesPage() {
                         onChange={toggleSelectAllOnPage}
                       />
                     </TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Trade</TableHead>
-                    <TableHead>Direction</TableHead>
-                    <TableHead>Session</TableHead>
-                    <TableHead>Account</TableHead>
-                    <TableHead className="text-right">Risk %</TableHead>
-                    <TableHead className="text-right">RRx</TableHead>
-                    <TableHead className="text-right">P&L</TableHead>
-                    <TableHead>Result</TableHead>
-                    <TableHead className="text-center">Chart</TableHead>
+                    {activeColumns.map((col) => (
+                      <TableHead
+                        key={col.id}
+                        className={`whitespace-nowrap ${col.headClass ?? ""}`}
+                      >
+                        {col.label}
+                      </TableHead>
+                    ))}
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -507,88 +593,18 @@ export default function TradesPage() {
                           onChange={() => toggleSelectOne(trade.id)}
                         />
                       </TableCell>
-                      <TableCell className="font-mono text-muted-foreground">
-                        {formatDate(trade.entry_date, "MMM d")}
-                      </TableCell>
-                      <TableCell>
-                        <Link href={`/trades/${trade.id}`} className="block hover:underline">
-                          <div className="font-medium">{trade.title}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {trade.security}
-                          </div>
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        <DirectionBadge direction={trade.direction} />
-                      </TableCell>
-                      <TableCell>
-                        {trade.session ? (
-                          <SessionBadge session={trade.session} />
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {trade.accounts?.name ? (
-                          <Badge variant="secondary">{trade.accounts.name}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {trade.risk_percent != null
-                          ? `${trade.risk_percent.toFixed(2)}%`
-                          : "-"}
-                      </TableCell>
-                      <TableCell className={`text-right font-mono font-bold ${
-                        trade.risk_reward_actual != null
-                          ? trade.risk_reward_actual >= 0
-                            ? "text-green"
-                            : "text-red"
-                          : ""
-                      }`}>
-                        {trade.risk_reward_actual != null
-                          ? `${trade.risk_reward_actual.toFixed(2)}R`
-                          : "-"}
-                      </TableCell>
-                      <TableCell
-                        className={`text-right font-mono font-medium ${
-                          trade.pnl != null
-                            ? trade.pnl >= 0
-                              ? "text-green"
-                              : "text-red"
-                            : ""
-                        }`}
-                      >
-                        {trade.pnl != null ? (
-                          <>
-                            {trade.pnl >= 0 ? "+" : ""}
-                            {formatCurrency(trade.pnl)}
-                          </>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <ResultBadge
-                          result={tradeResult(trade.pnl, trade.is_winner)}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {trade.chart_url ? (
-                          <a
-                            href={trade.chart_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center text-blue hover:text-blue/80 transition-colors"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
+                      {activeColumns.map((col) => (
+                        <TableCell
+                          key={col.id}
+                          className={
+                            typeof col.cellClass === "function"
+                              ? col.cellClass(trade)
+                              : (col.cellClass ?? "")
+                          }
+                        >
+                          {col.render(trade)}
+                        </TableCell>
+                      ))}
                       <TableCell>
                         {/* Actions Menu */}
                         <div className="relative" ref={activeMenu === trade.id ? menuRef : null}>
