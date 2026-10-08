@@ -194,4 +194,22 @@ export const DEFAULT_COLUMNS = [
   "chart",
 ];
 
+/**
+ * The profile is the source of truth; this only mirrors it so the table can
+ * paint before the profile query returns.
+ */
 export const COLUMN_STORAGE_KEY = "tralytic.trades.columns";
+
+/** Drop unknown ids so a renamed or removed column cannot blank the table. */
+export function sanitizeColumns(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return TRADE_COLUMNS.filter((c) => value.includes(c.id)).map((c) => c.id);
+}
+
+export function writeColumnCache(columns: string[]): void {
+  try {
+    localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(columns));
+  } catch {
+    // Losing the mirror only costs a flash of defaults on the next load.
+  }
+}

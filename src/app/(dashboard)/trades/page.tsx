@@ -29,6 +29,8 @@ import {
   TRADE_COLUMNS,
   DEFAULT_COLUMNS,
   COLUMN_STORAGE_KEY,
+  sanitizeColumns,
+  writeColumnCache,
 } from "@/components/trades/trade-columns";
 import { EmptyState } from "@/components/shared/empty-state";
 import { formatDate } from "@/lib/utils";
@@ -81,42 +83,6 @@ export default function TradesPage() {
   const [deleting, setDeleting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Column choice is a per-viewer convenience, so it lives in localStorage
-  // rather than the database — it will not follow the user to another browser.
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COLUMNS);
-  const [columnsOpen, setColumnsOpen] = useState(false);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(COLUMN_STORAGE_KEY);
-      if (!stored) return;
-      const parsed = JSON.parse(stored);
-      // Drop ids that no longer exist so a renamed column cannot blank the table.
-      const valid = Array.isArray(parsed)
-        ? parsed.filter((id) => TRADE_COLUMNS.some((c) => c.id === id))
-        : [];
-      // Reading storage during render would mismatch on hydration — the server
-      // has no localStorage — so this costs one extra render on mount.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (valid.length > 0) setVisibleColumns(valid);
-    } catch {
-      // Private window or blocked storage — the defaults are fine.
-    }
-  }, []);
-
-  const applyColumns = (next: string[]) => {
-    setVisibleColumns(next);
-    try {
-      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // Not persisting is survivable; the table still works this session.
-    }
-  };
-
-  const activeColumns = TRADE_COLUMNS.filter((c) =>
-    visibleColumns.includes(c.id)
-  );
-
   // Bulk selection — ids only, scoped to the rows currently on screen.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
@@ -131,6 +97,77 @@ export default function TradesPage() {
   const [selectedResult, setSelectedResult] = useState("");
 
   const supabase = createClient();
+
+  // Stored on the profile so the layout follows the user between devices;
+  // localStorage only mirrors it to avoid a flash of defaults on load.
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COLUMNS);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+
+  useEffect(() => {
+    // Paint from the local mirror first so the table does not flash the
+    // default layout on every load, then let the profile correct it.
+    let fromCache: string[] | null = null;
+    try {
+      const stored = localStorage.getItem(COLUMN_STORAGE_KEY);
+      if (stored) fromCache = sanitizeColumns(JSON.parse(stored));
+    } catch {
+      // Private window or blocked storage — the profile still arrives.
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (fromCache && fromCache.length > 0) setVisibleColumns(fromCache);
+
+    let cancelled = false;
+    async function loadProfilePreference() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("trade_columns")
+        .eq("id", user.id)
+        .single();
+      if (cancelled) return;
+
+      // NULL means never chosen; an empty array would mean no columns at all.
+      if (data?.trade_columns == null) return;
+      const valid = sanitizeColumns(data.trade_columns);
+      if (valid.length === 0) return;
+
+      setVisibleColumns(valid);
+      writeColumnCache(valid);
+    }
+
+    loadProfilePreference();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
+
+  const applyColumns = async (next: string[]) => {
+    setVisibleColumns(next);
+    writeColumnCache(next);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ trade_columns: next })
+      .eq("id", user.id);
+    if (error) {
+      // The mirror still holds it for this browser; only syncing is lost.
+      console.error("Error saving column preference:", error);
+    }
+  };
+
+  const activeColumns = TRADE_COLUMNS.filter((c) =>
+    visibleColumns.includes(c.id)
+  );
+
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 

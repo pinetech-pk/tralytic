@@ -18,6 +18,7 @@ export interface Database {
           timezone: string;
           default_currency: string;
           theme: string;
+          trade_columns: string[] | null;
           is_admin: boolean | null;
           suspended_at: string | null;
           suspended_reason: string | null;
@@ -33,6 +34,7 @@ export interface Database {
           timezone?: string;
           default_currency?: string;
           theme?: string;
+          trade_columns?: string[] | null;
           is_admin?: boolean | null;
           suspended_at?: string | null;
           suspended_reason?: string | null;
@@ -48,6 +50,7 @@ export interface Database {
           timezone?: string;
           default_currency?: string;
           theme?: string;
+          trade_columns?: string[] | null;
           is_admin?: boolean | null;
           suspended_at?: string | null;
           suspended_reason?: string | null;
