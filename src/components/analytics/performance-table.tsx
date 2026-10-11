@@ -14,18 +14,12 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PeriodicPerformanceRow } from "@/lib/types/database";
 import type { PeriodType } from "@/hooks/use-performance-data";
+import { RRX_CELL } from "@/components/analytics/rrx";
 
 interface PerformanceTableProps {
   data: PeriodicPerformanceRow[];
   periodType: PeriodType;
 }
-
-/**
- * RRx is the headline metric, so its column gets a tinted band rather than
- * just bold text: in a sixteen-column table that scrolls sideways, the
- * problem is finding the column, and green/red already carry sign meaning.
- */
-const RRX_CELL = "bg-blue/10";
 
 function formatPnl(value: number): string {
   const prefix = value >= 0 ? "+$" : "-$";
