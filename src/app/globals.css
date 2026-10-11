@@ -93,8 +93,15 @@
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
-* {
-  border-color: var(--border);
+/*
+ * Must stay inside @layer base. Unlayered CSS outranks every @layer, so as a
+ * bare `* { }` this beat Tailwind's own utilities and silently killed every
+ * border-<colour> class in the app — they all rendered as the default slate.
+ */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
 }
 
 body {

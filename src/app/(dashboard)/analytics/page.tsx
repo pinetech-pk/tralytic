@@ -13,6 +13,7 @@ import { PerformanceTab } from "@/components/analytics/performance-tab";
 import { ConsistencyTab } from "@/components/analytics/consistency-tab";
 import { StrategyTab } from "@/components/analytics/strategy-tab";
 import { SessionTab } from "@/components/analytics/session-tab";
+import { DirectionTab } from "@/components/analytics/direction-tab";
 
 const ACCOUNT_TYPE_OPTIONS = [
   { value: "", label: "All" },
@@ -311,6 +312,7 @@ export default function AnalyticsPage() {
             <TabsTrigger value="consistency">Consistency</TabsTrigger>
             <TabsTrigger value="strategy">By Strategy</TabsTrigger>
             <TabsTrigger value="session">By Session</TabsTrigger>
+            <TabsTrigger value="direction">By Direction</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6 mt-6">
@@ -346,6 +348,14 @@ export default function AnalyticsPage() {
               <LoadingSkeleton />
             ) : (
               <SessionTab trades={visibleTrades} />
+            )}
+          </TabsContent>
+
+          <TabsContent value="direction" className="space-y-6 mt-6">
+            {loading ? (
+              <LoadingSkeleton />
+            ) : (
+              <DirectionTab trades={visibleTrades} />
             )}
           </TabsContent>
 
